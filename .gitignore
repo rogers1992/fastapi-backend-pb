@@ -1,0 +1,28 @@
+# Virtual environment
+venv/
+.env
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+
+# IDE files
+.vscode/
+.idea/
+.DS_Store
+
+# Log files
+*.log
+
+# Database files
+*.db
+*.sqlite
+
+# Uploads and media
+uploads/
+media/
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/

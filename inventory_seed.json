@@ -1,0 +1,802 @@
+[
+  {
+    "product_id": 1,
+    "warehouse_id": 1,
+    "quantity": 22,
+    "min_stock_level": 19,
+    "max_stock_level": 94,
+    "location": "C-04-41"
+  },
+  {
+    "product_id": 2,
+    "warehouse_id": 2,
+    "quantity": 67,
+    "min_stock_level": 7,
+    "max_stock_level": 155,
+    "location": "B-09-13"
+  },
+  {
+    "product_id": 3,
+    "warehouse_id": 2,
+    "quantity": 6,
+    "min_stock_level": 11,
+    "max_stock_level": 69,
+    "location": "C-03-18"
+  },
+  {
+    "product_id": 4,
+    "warehouse_id": 2,
+    "quantity": 86,
+    "min_stock_level": 18,
+    "max_stock_level": 58,
+    "location": "C-15-41"
+  },
+  {
+    "product_id": 5,
+    "warehouse_id": 2,
+    "quantity": 72,
+    "min_stock_level": 7,
+    "max_stock_level": 153,
+    "location": "A-03-30"
+  },
+  {
+    "product_id": 6,
+    "warehouse_id": 2,
+    "quantity": 29,
+    "min_stock_level": 18,
+    "max_stock_level": 121,
+    "location": "A-04-46"
+  },
+  {
+    "product_id": 7,
+    "warehouse_id": 1,
+    "quantity": 64,
+    "min_stock_level": 17,
+    "max_stock_level": 85,
+    "location": "A-12-41"
+  },
+  {
+    "product_id": 8,
+    "warehouse_id": 1,
+    "quantity": 76,
+    "min_stock_level": 17,
+    "max_stock_level": 192,
+    "location": "B-04-21"
+  },
+  {
+    "product_id": 9,
+    "warehouse_id": 2,
+    "quantity": 60,
+    "min_stock_level": 12,
+    "max_stock_level": 109,
+    "location": "A-06-05"
+  },
+  {
+    "product_id": 10,
+    "warehouse_id": 2,
+    "quantity": 94,
+    "min_stock_level": 15,
+    "max_stock_level": 88,
+    "location": "B-17-09"
+  },
+  {
+    "product_id": 11,
+    "warehouse_id": 1,
+    "quantity": 70,
+    "min_stock_level": 7,
+    "max_stock_level": 185,
+    "location": "B-15-39"
+  },
+  {
+    "product_id": 12,
+    "warehouse_id": 1,
+    "quantity": 33,
+    "min_stock_level": 12,
+    "max_stock_level": 54,
+    "location": "B-12-09"
+  },
+  {
+    "product_id": 13,
+    "warehouse_id": 1,
+    "quantity": 26,
+    "min_stock_level": 16,
+    "max_stock_level": 76,
+    "location": "A-02-36"
+  },
+  {
+    "product_id": 14,
+    "warehouse_id": 2,
+    "quantity": 52,
+    "min_stock_level": 13,
+    "max_stock_level": 73,
+    "location": "A-06-16"
+  },
+  {
+    "product_id": 15,
+    "warehouse_id": 2,
+    "quantity": 73,
+    "min_stock_level": 8,
+    "max_stock_level": 65,
+    "location": "C-04-17"
+  },
+  {
+    "product_id": 16,
+    "warehouse_id": 1,
+    "quantity": 24,
+    "min_stock_level": 18,
+    "max_stock_level": 85,
+    "location": "A-19-21"
+  },
+  {
+    "product_id": 17,
+    "warehouse_id": 2,
+    "quantity": 58,
+    "min_stock_level": 8,
+    "max_stock_level": 162,
+    "location": "B-12-16"
+  },
+  {
+    "product_id": 18,
+    "warehouse_id": 1,
+    "quantity": 31,
+    "min_stock_level": 6,
+    "max_stock_level": 138,
+    "location": "A-06-03"
+  },
+  {
+    "product_id": 19,
+    "warehouse_id": 1,
+    "quantity": 76,
+    "min_stock_level": 13,
+    "max_stock_level": 93,
+    "location": "B-10-26"
+  },
+  {
+    "product_id": 20,
+    "warehouse_id": 1,
+    "quantity": 52,
+    "min_stock_level": 13,
+    "max_stock_level": 68,
+    "location": "A-03-49"
+  },
+  {
+    "product_id": 21,
+    "warehouse_id": 2,
+    "quantity": 79,
+    "min_stock_level": 12,
+    "max_stock_level": 181,
+    "location": "B-15-48"
+  },
+  {
+    "product_id": 22,
+    "warehouse_id": 2,
+    "quantity": 32,
+    "min_stock_level": 14,
+    "max_stock_level": 136,
+    "location": "C-15-05"
+  },
+  {
+    "product_id": 23,
+    "warehouse_id": 1,
+    "quantity": 16,
+    "min_stock_level": 8,
+    "max_stock_level": 71,
+    "location": "C-15-43"
+  },
+  {
+    "product_id": 24,
+    "warehouse_id": 2,
+    "quantity": 19,
+    "min_stock_level": 11,
+    "max_stock_level": 122,
+    "location": "B-05-05"
+  },
+  {
+    "product_id": 25,
+    "warehouse_id": 2,
+    "quantity": 26,
+    "min_stock_level": 18,
+    "max_stock_level": 199,
+    "location": "A-13-20"
+  },
+  {
+    "product_id": 26,
+    "warehouse_id": 1,
+    "quantity": 65,
+    "min_stock_level": 18,
+    "max_stock_level": 148,
+    "location": "C-04-48"
+  },
+  {
+    "product_id": 27,
+    "warehouse_id": 1,
+    "quantity": 29,
+    "min_stock_level": 16,
+    "max_stock_level": 174,
+    "location": "B-11-27"
+  },
+  {
+    "product_id": 28,
+    "warehouse_id": 1,
+    "quantity": 78,
+    "min_stock_level": 14,
+    "max_stock_level": 63,
+    "location": "A-12-23"
+  },
+  {
+    "product_id": 29,
+    "warehouse_id": 2,
+    "quantity": 37,
+    "min_stock_level": 6,
+    "max_stock_level": 50,
+    "location": "B-18-24"
+  },
+  {
+    "product_id": 30,
+    "warehouse_id": 2,
+    "quantity": 40,
+    "min_stock_level": 8,
+    "max_stock_level": 83,
+    "location": "C-17-01"
+  },
+  {
+    "product_id": 31,
+    "warehouse_id": 1,
+    "quantity": 71,
+    "min_stock_level": 14,
+    "max_stock_level": 176,
+    "location": "B-01-34"
+  },
+  {
+    "product_id": 32,
+    "warehouse_id": 2,
+    "quantity": 79,
+    "min_stock_level": 11,
+    "max_stock_level": 145,
+    "location": "B-09-19"
+  },
+  {
+    "product_id": 33,
+    "warehouse_id": 2,
+    "quantity": 22,
+    "min_stock_level": 17,
+    "max_stock_level": 130,
+    "location": "B-01-07"
+  },
+  {
+    "product_id": 34,
+    "warehouse_id": 1,
+    "quantity": 68,
+    "min_stock_level": 10,
+    "max_stock_level": 113,
+    "location": "C-06-35"
+  },
+  {
+    "product_id": 35,
+    "warehouse_id": 2,
+    "quantity": 89,
+    "min_stock_level": 8,
+    "max_stock_level": 189,
+    "location": "C-02-21"
+  },
+  {
+    "product_id": 36,
+    "warehouse_id": 2,
+    "quantity": 7,
+    "min_stock_level": 9,
+    "max_stock_level": 79,
+    "location": "A-14-34"
+  },
+  {
+    "product_id": 37,
+    "warehouse_id": 1,
+    "quantity": 86,
+    "min_stock_level": 18,
+    "max_stock_level": 67,
+    "location": "A-18-48"
+  },
+  {
+    "product_id": 38,
+    "warehouse_id": 1,
+    "quantity": 69,
+    "min_stock_level": 17,
+    "max_stock_level": 52,
+    "location": "A-01-43"
+  },
+  {
+    "product_id": 39,
+    "warehouse_id": 2,
+    "quantity": 60,
+    "min_stock_level": 17,
+    "max_stock_level": 191,
+    "location": "C-16-21"
+  },
+  {
+    "product_id": 40,
+    "warehouse_id": 1,
+    "quantity": 58,
+    "min_stock_level": 5,
+    "max_stock_level": 134,
+    "location": "C-16-38"
+  },
+  {
+    "product_id": 41,
+    "warehouse_id": 2,
+    "quantity": 54,
+    "min_stock_level": 5,
+    "max_stock_level": 127,
+    "location": "C-04-28"
+  },
+  {
+    "product_id": 42,
+    "warehouse_id": 2,
+    "quantity": 7,
+    "min_stock_level": 17,
+    "max_stock_level": 151,
+    "location": "C-17-49"
+  },
+  {
+    "product_id": 43,
+    "warehouse_id": 1,
+    "quantity": 51,
+    "min_stock_level": 17,
+    "max_stock_level": 127,
+    "location": "C-19-43"
+  },
+  {
+    "product_id": 44,
+    "warehouse_id": 2,
+    "quantity": 18,
+    "min_stock_level": 9,
+    "max_stock_level": 180,
+    "location": "B-07-46"
+  },
+  {
+    "product_id": 45,
+    "warehouse_id": 2,
+    "quantity": 76,
+    "min_stock_level": 15,
+    "max_stock_level": 117,
+    "location": "A-08-22"
+  },
+  {
+    "product_id": 46,
+    "warehouse_id": 1,
+    "quantity": 56,
+    "min_stock_level": 8,
+    "max_stock_level": 128,
+    "location": "A-15-29"
+  },
+  {
+    "product_id": 47,
+    "warehouse_id": 1,
+    "quantity": 89,
+    "min_stock_level": 5,
+    "max_stock_level": 174,
+    "location": "B-13-47"
+  },
+  {
+    "product_id": 48,
+    "warehouse_id": 1,
+    "quantity": 87,
+    "min_stock_level": 15,
+    "max_stock_level": 161,
+    "location": "C-12-48"
+  },
+  {
+    "product_id": 49,
+    "warehouse_id": 1,
+    "quantity": 99,
+    "min_stock_level": 19,
+    "max_stock_level": 195,
+    "location": "A-11-21"
+  },
+  {
+    "product_id": 50,
+    "warehouse_id": 2,
+    "quantity": 98,
+    "min_stock_level": 16,
+    "max_stock_level": 50,
+    "location": "B-11-37"
+  },
+  {
+    "product_id": 51,
+    "warehouse_id": 2,
+    "quantity": 70,
+    "min_stock_level": 14,
+    "max_stock_level": 96,
+    "location": "C-15-30"
+  },
+  {
+    "product_id": 52,
+    "warehouse_id": 2,
+    "quantity": 77,
+    "min_stock_level": 8,
+    "max_stock_level": 162,
+    "location": "B-11-43"
+  },
+  {
+    "product_id": 53,
+    "warehouse_id": 1,
+    "quantity": 53,
+    "min_stock_level": 11,
+    "max_stock_level": 53,
+    "location": "B-13-21"
+  },
+  {
+    "product_id": 54,
+    "warehouse_id": 1,
+    "quantity": 56,
+    "min_stock_level": 13,
+    "max_stock_level": 171,
+    "location": "A-02-20"
+  },
+  {
+    "product_id": 55,
+    "warehouse_id": 2,
+    "quantity": 42,
+    "min_stock_level": 20,
+    "max_stock_level": 156,
+    "location": "A-02-11"
+  },
+  {
+    "product_id": 56,
+    "warehouse_id": 2,
+    "quantity": 32,
+    "min_stock_level": 20,
+    "max_stock_level": 169,
+    "location": "B-13-28"
+  },
+  {
+    "product_id": 57,
+    "warehouse_id": 1,
+    "quantity": 23,
+    "min_stock_level": 13,
+    "max_stock_level": 192,
+    "location": "B-07-12"
+  },
+  {
+    "product_id": 58,
+    "warehouse_id": 2,
+    "quantity": 96,
+    "min_stock_level": 17,
+    "max_stock_level": 100,
+    "location": "A-16-39"
+  },
+  {
+    "product_id": 59,
+    "warehouse_id": 1,
+    "quantity": 49,
+    "min_stock_level": 14,
+    "max_stock_level": 174,
+    "location": "A-13-36"
+  },
+  {
+    "product_id": 60,
+    "warehouse_id": 1,
+    "quantity": 44,
+    "min_stock_level": 19,
+    "max_stock_level": 149,
+    "location": "C-02-35"
+  },
+  {
+    "product_id": 61,
+    "warehouse_id": 1,
+    "quantity": 11,
+    "min_stock_level": 16,
+    "max_stock_level": 165,
+    "location": "C-03-02"
+  },
+  {
+    "product_id": 62,
+    "warehouse_id": 2,
+    "quantity": 42,
+    "min_stock_level": 16,
+    "max_stock_level": 189,
+    "location": "C-02-48"
+  },
+  {
+    "product_id": 63,
+    "warehouse_id": 1,
+    "quantity": 46,
+    "min_stock_level": 19,
+    "max_stock_level": 118,
+    "location": "B-07-01"
+  },
+  {
+    "product_id": 64,
+    "warehouse_id": 1,
+    "quantity": 64,
+    "min_stock_level": 6,
+    "max_stock_level": 82,
+    "location": "A-18-02"
+  },
+  {
+    "product_id": 65,
+    "warehouse_id": 1,
+    "quantity": 59,
+    "min_stock_level": 13,
+    "max_stock_level": 198,
+    "location": "A-17-06"
+  },
+  {
+    "product_id": 66,
+    "warehouse_id": 1,
+    "quantity": 96,
+    "min_stock_level": 9,
+    "max_stock_level": 111,
+    "location": "A-20-17"
+  },
+  {
+    "product_id": 67,
+    "warehouse_id": 2,
+    "quantity": 48,
+    "min_stock_level": 18,
+    "max_stock_level": 132,
+    "location": "A-14-03"
+  },
+  {
+    "product_id": 68,
+    "warehouse_id": 2,
+    "quantity": 32,
+    "min_stock_level": 14,
+    "max_stock_level": 123,
+    "location": "A-08-38"
+  },
+  {
+    "product_id": 69,
+    "warehouse_id": 2,
+    "quantity": 5,
+    "min_stock_level": 16,
+    "max_stock_level": 199,
+    "location": "A-09-19"
+  },
+  {
+    "product_id": 70,
+    "warehouse_id": 2,
+    "quantity": 97,
+    "min_stock_level": 20,
+    "max_stock_level": 99,
+    "location": "C-11-21"
+  },
+  {
+    "product_id": 71,
+    "warehouse_id": 1,
+    "quantity": 65,
+    "min_stock_level": 12,
+    "max_stock_level": 151,
+    "location": "C-20-23"
+  },
+  {
+    "product_id": 72,
+    "warehouse_id": 1,
+    "quantity": 48,
+    "min_stock_level": 10,
+    "max_stock_level": 182,
+    "location": "B-16-41"
+  },
+  {
+    "product_id": 73,
+    "warehouse_id": 2,
+    "quantity": 59,
+    "min_stock_level": 5,
+    "max_stock_level": 114,
+    "location": "A-02-06"
+  },
+  {
+    "product_id": 74,
+    "warehouse_id": 1,
+    "quantity": 54,
+    "min_stock_level": 8,
+    "max_stock_level": 193,
+    "location": "A-07-35"
+  },
+  {
+    "product_id": 75,
+    "warehouse_id": 1,
+    "quantity": 11,
+    "min_stock_level": 14,
+    "max_stock_level": 151,
+    "location": "A-07-34"
+  },
+  {
+    "product_id": 76,
+    "warehouse_id": 1,
+    "quantity": 7,
+    "min_stock_level": 20,
+    "max_stock_level": 55,
+    "location": "C-20-26"
+  },
+  {
+    "product_id": 77,
+    "warehouse_id": 1,
+    "quantity": 43,
+    "min_stock_level": 16,
+    "max_stock_level": 106,
+    "location": "C-03-35"
+  },
+  {
+    "product_id": 78,
+    "warehouse_id": 2,
+    "quantity": 72,
+    "min_stock_level": 15,
+    "max_stock_level": 159,
+    "location": "B-17-36"
+  },
+  {
+    "product_id": 79,
+    "warehouse_id": 1,
+    "quantity": 33,
+    "min_stock_level": 16,
+    "max_stock_level": 145,
+    "location": "B-04-44"
+  },
+  {
+    "product_id": 80,
+    "warehouse_id": 2,
+    "quantity": 75,
+    "min_stock_level": 16,
+    "max_stock_level": 159,
+    "location": "C-03-11"
+  },
+  {
+    "product_id": 81,
+    "warehouse_id": 2,
+    "quantity": 35,
+    "min_stock_level": 8,
+    "max_stock_level": 194,
+    "location": "A-04-28"
+  },
+  {
+    "product_id": 82,
+    "warehouse_id": 1,
+    "quantity": 31,
+    "min_stock_level": 20,
+    "max_stock_level": 104,
+    "location": "A-14-09"
+  },
+  {
+    "product_id": 83,
+    "warehouse_id": 1,
+    "quantity": 97,
+    "min_stock_level": 7,
+    "max_stock_level": 159,
+    "location": "C-20-36"
+  },
+  {
+    "product_id": 84,
+    "warehouse_id": 1,
+    "quantity": 35,
+    "min_stock_level": 9,
+    "max_stock_level": 165,
+    "location": "C-09-10"
+  },
+  {
+    "product_id": 85,
+    "warehouse_id": 2,
+    "quantity": 97,
+    "min_stock_level": 11,
+    "max_stock_level": 103,
+    "location": "B-09-08"
+  },
+  {
+    "product_id": 86,
+    "warehouse_id": 1,
+    "quantity": 53,
+    "min_stock_level": 20,
+    "max_stock_level": 83,
+    "location": "B-17-47"
+  },
+  {
+    "product_id": 87,
+    "warehouse_id": 1,
+    "quantity": 25,
+    "min_stock_level": 6,
+    "max_stock_level": 69,
+    "location": "C-01-31"
+  },
+  {
+    "product_id": 88,
+    "warehouse_id": 1,
+    "quantity": 78,
+    "min_stock_level": 20,
+    "max_stock_level": 93,
+    "location": "B-19-02"
+  },
+  {
+    "product_id": 89,
+    "warehouse_id": 2,
+    "quantity": 42,
+    "min_stock_level": 18,
+    "max_stock_level": 53,
+    "location": "B-13-36"
+  },
+  {
+    "product_id": 90,
+    "warehouse_id": 1,
+    "quantity": 23,
+    "min_stock_level": 7,
+    "max_stock_level": 56,
+    "location": "B-03-02"
+  },
+  {
+    "product_id": 91,
+    "warehouse_id": 1,
+    "quantity": 47,
+    "min_stock_level": 8,
+    "max_stock_level": 142,
+    "location": "B-19-47"
+  },
+  {
+    "product_id": 92,
+    "warehouse_id": 1,
+    "quantity": 45,
+    "min_stock_level": 8,
+    "max_stock_level": 86,
+    "location": "B-06-29"
+  },
+  {
+    "product_id": 93,
+    "warehouse_id": 1,
+    "quantity": 83,
+    "min_stock_level": 9,
+    "max_stock_level": 151,
+    "location": "C-08-23"
+  },
+  {
+    "product_id": 94,
+    "warehouse_id": 1,
+    "quantity": 72,
+    "min_stock_level": 10,
+    "max_stock_level": 143,
+    "location": "A-08-05"
+  },
+  {
+    "product_id": 95,
+    "warehouse_id": 2,
+    "quantity": 31,
+    "min_stock_level": 15,
+    "max_stock_level": 70,
+    "location": "A-04-33"
+  },
+  {
+    "product_id": 96,
+    "warehouse_id": 2,
+    "quantity": 46,
+    "min_stock_level": 6,
+    "max_stock_level": 137,
+    "location": "A-10-05"
+  },
+  {
+    "product_id": 97,
+    "warehouse_id": 2,
+    "quantity": 89,
+    "min_stock_level": 17,
+    "max_stock_level": 107,
+    "location": "B-13-18"
+  },
+  {
+    "product_id": 98,
+    "warehouse_id": 2,
+    "quantity": 87,
+    "min_stock_level": 11,
+    "max_stock_level": 196,
+    "location": "C-06-29"
+  },
+  {
+    "product_id": 99,
+    "warehouse_id": 2,
+    "quantity": 93,
+    "min_stock_level": 11,
+    "max_stock_level": 53,
+    "location": "B-11-36"
+  },
+  {
+    "product_id": 100,
+    "warehouse_id": 2,
+    "quantity": 31,
+    "min_stock_level": 6,
+    "max_stock_level": 177,
+    "location": "C-15-16"
+  }
+]
