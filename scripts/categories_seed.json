@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "Cadenas y Transmisión",
+    "description": "Cadenas, cassettes, platos y componentes de transmisión para bicicletas"
+  },
+  {
+    "id": 2,
+    "name": "Frenos",
+    "description": "Pastillas, discos, cables y sistemas de frenado"
+  },
+  {
+    "id": 3,
+    "name": "Neumáticos y Cámaras",
+    "description": "Neumáticos, cámaras y accesorios para ruedas"
+  },
+  {
+    "id": 4,
+    "name": "Cambios y Desviadores",
+    "description": "Cambios traseros, desviadores delanteros, palancas y cassettes"
+  },
+  {
+    "id": 5,
+    "name": "Accesorios",
+    "description": "Cascos, luces, portabidones, multiherramientas y bombas de aire"
+  },
+  {
+    "id": 6,
+    "name": "Herramientas",
+    "description": "Llaves, extractores, herramientas de cadena y juegos completos"
+  }
+]

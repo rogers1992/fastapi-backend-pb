@@ -1,0 +1,86 @@
+[
+  {
+    "id": 1,
+    "name": "Shimano México",
+    "email": "ventas@shimano.mx",
+    "phone": "+52 55 1234 5678",
+    "address": "Av. Industrial 456, CDMX",
+    "website": "https://shimano.mx",
+    "payment_terms": "Net 30",
+    "contact_info": {
+      "contact_name": "Carlos Mendoza",
+      "position": "Gerente de Ventas"
+    },
+    "is_active": true
+  },
+  {
+    "id": 2,
+    "name": "SRAM Distribución",
+    "email": "pedidos@sram-distribucion.com",
+    "phone": "+52 33 2345 6789",
+    "address": "Calle Comercio 789, Guadalajara",
+    "website": "https://sram-distribucion.com",
+    "payment_terms": "Net 45",
+    "contact_info": {
+      "contact_name": "Ana Rodríguez",
+      "position": "Coordinadora Comercial"
+    },
+    "is_active": true
+  },
+  {
+    "id": 3,
+    "name": "Tektro Frenos MX",
+    "email": "info@tektro-frenos.mx",
+    "phone": "+52 81 3456 7890",
+    "address": "Blvd. Tecnológico 123, Monterrey",
+    "website": "https://tektro-frenos.mx",
+    "payment_terms": "Net 30",
+    "contact_info": {
+      "contact_name": "Roberto Silva",
+      "position": "Director de Operaciones"
+    },
+    "is_active": true
+  },
+  {
+    "id": 4,
+    "name": "KMC Cadenas",
+    "email": "ventas@kmc-cadenas.com",
+    "phone": "+52 55 4567 8901",
+    "address": "Parque Industrial Norte 45, CDMX",
+    "website": "https://kmc-cadenas.com",
+    "payment_terms": "Net 60",
+    "contact_info": {
+      "contact_name": "Laura García",
+      "position": "Ejecutiva de Cuentas"
+    },
+    "is_active": true
+  },
+  {
+    "id": 5,
+    "name": "Accesorios Bici MX",
+    "email": "contacto@accesoriosbicimx.com",
+    "phone": "+52 222 5678 9012",
+    "address": "Av. Reforma 234, Puebla",
+    "website": "https://accesoriosbicimx.com",
+    "payment_terms": "Net 30",
+    "contact_info": {
+      "contact_name": "Miguel Torres",
+      "position": "Gerente General"
+    },
+    "is_active": true
+  },
+  {
+    "id": 6,
+    "name": "Herramientas Pro",
+    "email": "pedidos@herramientaspro.com",
+    "phone": "+52 33 6789 0123",
+    "address": "Calle Herreros 567, Guadalajara",
+    "website": "https://herramientaspro.com",
+    "payment_terms": "Net 45",
+    "contact_info": {
+      "contact_name": "Patricia López",
+      "position": "Jefa de Ventas"
+    },
+    "is_active": true
+  }
+]

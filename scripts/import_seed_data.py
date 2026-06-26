@@ -28,6 +28,12 @@ def import_seed_data():
     
     try:
         # Load seed files
+        with open('categories_seed.json', 'r', encoding='utf-8') as f:
+            categories_data = json.load(f)
+        
+        with open('suppliers_seed.json', 'r', encoding='utf-8') as f:
+            suppliers_data = json.load(f)
+        
         with open('products_seed.json', 'r', encoding='utf-8') as f:
             products_data = json.load(f)
         
@@ -36,6 +42,22 @@ def import_seed_data():
         
         with open('inventory_seed.json', 'r', encoding='utf-8') as f:
             inventory_data = json.load(f)
+        
+        # Insert categories first (products depend on them)
+        print(f"Inserting {len(categories_data)} categories...")
+        for category_data in categories_data:
+            category = Category(**category_data)
+            db.add(category)
+        db.commit()
+        print(f"✓ Categories inserted")
+        
+        # Insert suppliers (products depend on them)
+        print(f"Inserting {len(suppliers_data)} suppliers...")
+        for supplier_data in suppliers_data:
+            supplier = Supplier(**supplier_data)
+            db.add(supplier)
+        db.commit()
+        print(f"✓ Suppliers inserted")
         
         # Insert products
         print(f"Inserting {len(products_data)} products...")

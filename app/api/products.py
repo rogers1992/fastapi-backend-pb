@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 from ..database import get_db
 from ..models.product import Product, Category, Supplier
@@ -7,18 +8,40 @@ from ..schemas.product import ProductCreate, ProductResponse, ProductUpdate
 from ..core.dependencies import get_current_user, require_permission
 from ..models.user import User
 
+from sqlalchemy import func
+
 router = APIRouter()
 
 
-@router.get("/", response_model=List[ProductResponse])
+@router.get("/")
 async def get_products(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
+    search: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    products = db.query(Product).filter(Product.is_active == True).offset(skip).limit(limit).all()
-    return products
+    query = db.query(Product).filter(Product.is_active == True)
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            Product.name.ilike(search_pattern) |
+            Product.sku.ilike(search_pattern) |
+            Product.barcode.ilike(search_pattern)
+        )
+
+    total = query.with_entities(func.count(Product.id)).scalar()
+    products = query.offset(skip).limit(limit).all()
+
+    return {
+        "items": products,
+        "total_items": total,
+        "current_page": (skip // limit) + 1,
+        "page_size": limit,
+        "total_pages": (total + limit - 1) // limit if limit > 0 else 0,
+    }
+
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
@@ -53,7 +76,14 @@ async def create_product(
 ):
     db_product = Product(**product.model_dump())
     db.add(db_product)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El producto con el SKU o Codigo de Barras ya existe."
+        )
     db.refresh(db_product)
     return db_product
 

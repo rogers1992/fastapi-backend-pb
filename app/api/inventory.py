@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from ..database import get_db
 from ..models.inventory import InventoryItem, Warehouse
@@ -107,3 +108,42 @@ async def transfer_inventory(
 
     db.commit()
     return {"message": "Transfer completed successfully"}
+
+
+@router.get("/low-stock", response_model=List[InventoryItemResponse])
+async def get_low_stock_items(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory", "read")),
+):
+    items = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.quantity <= InventoryItem.min_stock_level)
+        .all()
+    )
+    return items
+
+
+@router.get("/summary")
+async def get_inventory_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory", "read")),
+):
+    total_items = db.query(InventoryItem).count()
+    total_warehouses = (
+        db.query(Warehouse).filter(Warehouse.is_active == True).count()
+    )
+    low_stock_count = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.quantity <= InventoryItem.min_stock_level)
+        .count()
+    )
+    total_quantity = 0
+    result = db.query(func.sum(InventoryItem.quantity)).scalar()
+    if result is not None:
+        total_quantity = int(result)
+    return {
+        "total_items": total_items,
+        "total_warehouses": total_warehouses,
+        "low_stock_count": low_stock_count,
+        "total_quantity": total_quantity,
+    }
