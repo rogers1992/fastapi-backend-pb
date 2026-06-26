@@ -27,6 +27,12 @@ htmlcov/
 .coverage
 .pytest_cache/
 
+# Agent tooling (opencode, etc.)
+AGENTS.md
+skills-lock.json
+.agents/
+.opencode/
+
 AGENTS.md
 skills-lock.json
 .agents/
