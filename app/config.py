@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
     DEBUG: bool = False
+    SEED_DEFAULTS: bool = False
 
     class Config:
         env_file = ".env"

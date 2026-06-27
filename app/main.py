@@ -6,6 +6,17 @@ from .database import engine, Base
 
 Base.metadata.create_all(bind=engine)
 
+if settings.SEED_DEFAULTS:
+    from .database import SessionLocal
+    from .seed import seed_defaults
+    db = SessionLocal()
+    try:
+        seed_defaults(db)
+    except Exception as e:
+        print(f"[seed] error: {e}")
+    finally:
+        db.close()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
