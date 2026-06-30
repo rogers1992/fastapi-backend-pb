@@ -17,6 +17,7 @@ class Product(Base):
     unit_price = Column(Numeric(10, 2), nullable=False)
     weight = Column(Numeric(8, 2))
     dimensions = Column(JSONB)
+    image_url = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

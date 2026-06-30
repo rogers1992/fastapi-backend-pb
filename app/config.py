@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     ]
     DEBUG: bool = False
     SEED_DEFAULTS: bool = False
+    UPLOAD_DIR: str = "app/uploads"
+    MAX_IMAGE_SIZE_BYTES: int = 5_242_880  # 5 MB
 
     class Config:
         env_file = ".env"

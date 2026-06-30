@@ -11,8 +11,6 @@ CREATE TABLE roles (
     description TEXT,
     is_system BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- 2. Users Table
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -74,6 +72,7 @@ CREATE TABLE products (
     unit_price DECIMAL(10,2) NOT NULL,
     weight DECIMAL(8,2),
     dimensions JSONB,
+    image_url VARCHAR(255),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -4,11 +4,51 @@ from sqlalchemy import func
 from typing import List
 from ..database import get_db
 from ..models.inventory import InventoryItem, Warehouse
+from ..models.product import Product
 from ..schemas.inventory import InventoryItemCreate, InventoryItemResponse, InventoryItemUpdate, InventoryTransfer
 from ..core.dependencies import get_current_user, require_permission
 from ..models.user import User
+from ..services.notification_service import NotificationService
 
 router = APIRouter()
+
+
+def _check_low_stock(db: Session, item: InventoryItem) -> None:
+    """
+    If the given inventory item is at or below its min_stock_level, fan out
+    a low_stock notification to every active user with inventory:read.
+    Idempotent-ish: we don't deduplicate here, so repeated saves at low stock
+    will produce repeated notifications. Acceptable for an MVP alert system.
+    """
+    if item.min_stock_level is None:
+        return
+    if item.quantity > item.min_stock_level:
+        return
+
+    product = db.query(Product).filter(Product.id == item.product_id).first()
+    product_name = product.name if product else f"Producto #{item.product_id}"
+
+    warehouse = db.query(Warehouse).filter(Warehouse.id == item.warehouse_id).first()
+    warehouse_name = warehouse.name if warehouse else f"Almacen #{item.warehouse_id}"
+
+    NotificationService.notify_users_with_permission(
+        db,
+        resource="inventory",
+        action="read",
+        type="low_stock",
+        title="Stock bajo",
+        message=(
+            f"{product_name} tiene {item.quantity} unidades "
+            f"en {warehouse_name} (minimo: {item.min_stock_level})."
+        ),
+        data={
+            "product_id": item.product_id,
+            "warehouse_id": item.warehouse_id,
+            "warehouse_name": warehouse_name,
+            "quantity": item.quantity,
+            "min_stock_level": item.min_stock_level,
+        },
+    )
 
 
 @router.get("/", response_model=List[InventoryItemResponse])
@@ -50,6 +90,7 @@ async def create_inventory_item(
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
+    _check_low_stock(db, db_item)
     return db_item
 
 
@@ -70,6 +111,7 @@ async def update_inventory_item(
 
     db.commit()
     db.refresh(db_item)
+    _check_low_stock(db, db_item)
     return db_item
 
 
@@ -107,6 +149,12 @@ async def transfer_inventory(
     dest_item.quantity += transfer.quantity
 
     db.commit()
+    db.refresh(source_item)
+    if source_item is not dest_item:
+        db.refresh(dest_item)
+    _check_low_stock(db, source_item)
+    if source_item is not dest_item:
+        _check_low_stock(db, dest_item)
     return {"message": "Transfer completed successfully"}
 
 

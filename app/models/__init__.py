@@ -3,6 +3,7 @@ from .product import Product, Category, Supplier
 from .inventory import InventoryItem, Warehouse
 from .sale import Sale, SaleItem
 from .customer import Customer, Loyalty
+from .notification import Notification
 
 __all__ = [
     'User', 'Role',
@@ -10,4 +11,5 @@ __all__ = [
     'InventoryItem', 'Warehouse',
     'Sale', 'SaleItem',
     'Customer', 'Loyalty',
+    'Notification',
 ]

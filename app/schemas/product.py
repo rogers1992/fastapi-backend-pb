@@ -10,6 +10,7 @@ class ProductBase(BaseModel):
     description: Optional[str] = None
     unit_price: Decimal
     weight: Optional[Decimal] = None
+    image_url: Optional[str] = None
     category_id: int
     supplier_id: int
 
@@ -23,6 +24,7 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = None
     unit_price: Optional[Decimal] = None
     weight: Optional[Decimal] = None
+    image_url: Optional[str] = None
     category_id: Optional[int] = None
     supplier_id: Optional[int] = None
     is_active: Optional[bool] = None
