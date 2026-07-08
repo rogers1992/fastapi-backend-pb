@@ -19,7 +19,6 @@ async def get_warehouses(
 ):
     warehouses = (
         db.query(Warehouse)
-        .filter(Warehouse.is_active == True)
         .offset(skip)
         .limit(limit)
         .all()
@@ -79,6 +78,6 @@ async def delete_warehouse(
     db_warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
     if not db_warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    db_warehouse.is_active = False
+    db.delete(db_warehouse)
     db.commit()
     return {"message": "Warehouse deleted successfully"}

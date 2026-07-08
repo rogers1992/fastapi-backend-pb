@@ -52,7 +52,7 @@ def generate_suppliers():
             'address': 'Av. Industrial 456, CDMX',
             'website': 'https://shimano.mx',
             'payment_terms': 'Net 30',
-            'contact_info': {'contact_name': 'Carlos Mendoza', 'position': 'Gerente de Ventas'},
+            'contact_name': 'Carlos Mendoza',
             'is_active': True,
         },
         {
@@ -63,7 +63,7 @@ def generate_suppliers():
             'address': 'Calle Comercio 789, Guadalajara',
             'website': 'https://sram-distribucion.com',
             'payment_terms': 'Net 45',
-            'contact_info': {'contact_name': 'Ana Rodríguez', 'position': 'Coordinadora Comercial'},
+            'contact_name': 'Ana Rodríguez',
             'is_active': True,
         },
         {
@@ -74,7 +74,7 @@ def generate_suppliers():
             'address': 'Blvd. Tecnológico 123, Monterrey',
             'website': 'https://tektro-frenos.mx',
             'payment_terms': 'Net 30',
-            'contact_info': {'contact_name': 'Roberto Silva', 'position': 'Director de Operaciones'},
+            'contact_name': 'Roberto Silva',
             'is_active': True,
         },
         {
@@ -85,7 +85,7 @@ def generate_suppliers():
             'address': 'Parque Industrial Norte 45, CDMX',
             'website': 'https://kmc-cadenas.com',
             'payment_terms': 'Net 60',
-            'contact_info': {'contact_name': 'Laura García', 'position': 'Ejecutiva de Cuentas'},
+            'contact_name': 'Laura García',
             'is_active': True,
         },
         {
@@ -96,7 +96,7 @@ def generate_suppliers():
             'address': 'Av. Reforma 234, Puebla',
             'website': 'https://accesoriosbicimx.com',
             'payment_terms': 'Net 30',
-            'contact_info': {'contact_name': 'Miguel Torres', 'position': 'Gerente General'},
+            'contact_name': 'Miguel Torres',
             'is_active': True,
         },
         {
@@ -107,7 +107,7 @@ def generate_suppliers():
             'address': 'Calle Herreros 567, Guadalajara',
             'website': 'https://herramientaspro.com',
             'payment_terms': 'Net 45',
-            'contact_info': {'contact_name': 'Patricia López', 'position': 'Jefa de Ventas'},
+            'contact_name': 'Patricia López',
             'is_active': True,
         },
     ]

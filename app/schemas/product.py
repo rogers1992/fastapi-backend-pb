@@ -5,14 +5,14 @@ from decimal import Decimal
 
 class ProductBase(BaseModel):
     name: str
-    sku: str
+    sku: str = ""
     barcode: Optional[str] = None
     description: Optional[str] = None
     unit_price: Decimal
     weight: Optional[Decimal] = None
     image_url: Optional[str] = None
     category_id: int
-    supplier_id: int
+    supplier_id: Optional[int] = None
 
 class ProductCreate(ProductBase):
     pass

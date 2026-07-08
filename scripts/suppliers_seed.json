@@ -7,11 +7,8 @@
     "address": "Av. Industrial 456, CDMX",
     "website": "https://shimano.mx",
     "payment_terms": "Net 30",
-    "contact_info": {
-      "contact_name": "Carlos Mendoza",
-      "position": "Gerente de Ventas"
-    },
-    "is_active": true
+    "is_active": true,
+    "contact_name": "Carlos Mendoza"
   },
   {
     "id": 2,
@@ -21,11 +18,8 @@
     "address": "Calle Comercio 789, Guadalajara",
     "website": "https://sram-distribucion.com",
     "payment_terms": "Net 45",
-    "contact_info": {
-      "contact_name": "Ana Rodríguez",
-      "position": "Coordinadora Comercial"
-    },
-    "is_active": true
+    "is_active": true,
+    "contact_name": "Ana Rodríguez"
   },
   {
     "id": 3,
@@ -35,11 +29,8 @@
     "address": "Blvd. Tecnológico 123, Monterrey",
     "website": "https://tektro-frenos.mx",
     "payment_terms": "Net 30",
-    "contact_info": {
-      "contact_name": "Roberto Silva",
-      "position": "Director de Operaciones"
-    },
-    "is_active": true
+    "is_active": true,
+    "contact_name": "Roberto Silva"
   },
   {
     "id": 4,
@@ -49,11 +40,8 @@
     "address": "Parque Industrial Norte 45, CDMX",
     "website": "https://kmc-cadenas.com",
     "payment_terms": "Net 60",
-    "contact_info": {
-      "contact_name": "Laura García",
-      "position": "Ejecutiva de Cuentas"
-    },
-    "is_active": true
+    "is_active": true,
+    "contact_name": "Laura García"
   },
   {
     "id": 5,
@@ -63,11 +51,8 @@
     "address": "Av. Reforma 234, Puebla",
     "website": "https://accesoriosbicimx.com",
     "payment_terms": "Net 30",
-    "contact_info": {
-      "contact_name": "Miguel Torres",
-      "position": "Gerente General"
-    },
-    "is_active": true
+    "is_active": true,
+    "contact_name": "Miguel Torres"
   },
   {
     "id": 6,
@@ -77,10 +62,7 @@
     "address": "Calle Herreros 567, Guadalajara",
     "website": "https://herramientaspro.com",
     "payment_terms": "Net 45",
-    "contact_info": {
-      "contact_name": "Patricia López",
-      "position": "Jefa de Ventas"
-    },
-    "is_active": true
+    "is_active": true,
+    "contact_name": "Patricia López"
   }
 ]
