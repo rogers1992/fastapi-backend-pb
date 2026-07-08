@@ -45,7 +45,7 @@ class Supplier(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
-    contact_info = Column(JSONB)
+    contact_name = Column(String(200))
     address = Column(Text)
     email = Column(String(100))
     phone = Column(String(20))

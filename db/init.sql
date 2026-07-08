@@ -32,7 +32,7 @@ CREATE TABLE warehouses (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     location TEXT,
-    contact_info JSONB,
+    contact_name VARCHAR(200),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -50,7 +50,7 @@ CREATE TABLE categories (
 CREATE TABLE suppliers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
-    contact_info JSONB,
+    contact_name VARCHAR(200),
     address TEXT,
     email VARCHAR(100),
     phone VARCHAR(20),
@@ -221,10 +221,10 @@ INSERT INTO categories (name, description) VALUES
 ('Herramientas', 'Herramientas y mantenimiento');
 
 -- Suppliers (6 suppliers)
-INSERT INTO suppliers (name, contact_info, address, email, phone, payment_terms) VALUES
-('Shimano México', '{"contact": "Carlos Ruiz"}', 'Ciudad de México', 'ventas@shimano.mx', '+52 555 300 0000', '30 días'),
-('Tektro Latinoamérica', '{"contact": "María López"}', 'Guadalajara', 'contacto@tektro.mx', '+52 333 400 0000', 'Contado'),
-('Michelin Deportes', '{"contact": "Juan Pérez"}', 'Monterrey', 'ventas@michelin.mx', '+52 818 500 0000', '45 días'),
-('SRAM Components', '{"contact": "Ana García"}', 'Puebla', 'ventas@sram.mx', '+52 222 600 0000', '30 días'),
-('Park Tools', '{"contact": "Roberto Díaz"}', 'Tijuana', 'ventas@parktool.mx', '+52 664 700 0000', 'Contado'),
-('Continental Tires', '{"contact": "Luis Hernández"}', 'Mérida', 'ventas@continental.mx', '+52 999 800 0000', '60 días');
+INSERT INTO suppliers (name, contact_name, address, email, phone, payment_terms) VALUES
+('Shimano México', 'Carlos Ruiz', 'Ciudad de México', 'ventas@shimano.mx', '+52 555 300 0000', '30 días'),
+('Tektro Latinoamérica', 'María López', 'Guadalajara', 'contacto@tektro.mx', '+52 333 400 0000', 'Contado'),
+('Michelin Deportes', 'Juan Pérez', 'Monterrey', 'ventas@michelin.mx', '+52 818 500 0000', '45 días'),
+('SRAM Components', 'Ana García', 'Puebla', 'ventas@sram.mx', '+52 222 600 0000', '30 días'),
+('Park Tools', 'Roberto Díaz', 'Tijuana', 'ventas@parktool.mx', '+52 664 700 0000', 'Contado'),
+('Continental Tires', 'Luis Hernández', 'Mérida', 'ventas@continental.mx', '+52 999 800 0000', '60 días');

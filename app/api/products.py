@@ -111,7 +111,14 @@ async def update_product(
     for key, value in update_data.items():
         setattr(db_product, key, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El producto con el SKU o Codigo de Barras ya existe."
+        )
     db.refresh(db_product)
     return db_product
 

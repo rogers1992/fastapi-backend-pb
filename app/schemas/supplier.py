@@ -1,12 +1,11 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
-from sqlalchemy.dialects.postgresql import JSONB
 
 
 class SupplierBase(BaseModel):
     name: str
-    contact_info: Optional[dict] = None
+    contact_name: Optional[str] = None
     address: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -21,7 +20,7 @@ class SupplierCreate(SupplierBase):
 
 class SupplierUpdate(BaseModel):
     name: Optional[str] = None
-    contact_info: Optional[dict] = None
+    contact_name: Optional[str] = None
     address: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
