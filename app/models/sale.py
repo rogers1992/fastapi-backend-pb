@@ -21,6 +21,10 @@ class Sale(Base):
     user = relationship("User", back_populates="sales")
     sale_items = relationship("SaleItem", back_populates="sale")
 
+    @property
+    def items(self):
+        return self.sale_items
+
 class SaleItem(Base):
     __tablename__ = "sale_items"
     
@@ -36,3 +40,7 @@ class SaleItem(Base):
     # Relationships
     sale = relationship("Sale", back_populates="sale_items")
     product = relationship("Product", back_populates="sale_items")
+
+    @property
+    def product_name(self) -> str:
+        return self.product.name if self.product else f"Producto #{self.product_id}"

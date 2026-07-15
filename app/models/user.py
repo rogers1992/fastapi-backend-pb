@@ -22,6 +22,7 @@ class User(Base):
     
     role = relationship("Role", back_populates="users", lazy="joined")
     sales = relationship("Sale", back_populates="user")
+    orders = relationship("Order", back_populates="user")
 
 class Role(Base):
     __tablename__ = "roles"

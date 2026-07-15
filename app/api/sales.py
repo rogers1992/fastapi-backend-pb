@@ -58,7 +58,13 @@ async def get_sales(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("sales", "read")),
 ):
-    sales = db.query(Sale).order_by(Sale.sale_date.desc()).offset(skip).limit(limit).all()
+    query = db.query(Sale)
+
+    # Vendedor can only see their own sales
+    if current_user.role and current_user.role.name == "vendedor":
+        query = query.filter(Sale.user_id == current_user.id)
+
+    sales = query.order_by(Sale.sale_date.desc()).offset(skip).limit(limit).all()
     return sales
 
 
@@ -68,7 +74,13 @@ async def get_sale(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("sales", "read")),
 ):
-    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    query = db.query(Sale).filter(Sale.id == sale_id)
+
+    # Vendedor can only view their own sales
+    if current_user.role and current_user.role.name == "vendedor":
+        query = query.filter(Sale.user_id == current_user.id)
+
+    sale = query.first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     return sale

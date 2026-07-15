@@ -27,6 +27,7 @@ class Product(Base):
     supplier = relationship("Supplier", back_populates="products")
     inventory_items = relationship("InventoryItem", back_populates="product")
     sale_items = relationship("SaleItem", back_populates="product")
+    order_items = relationship("OrderItem", back_populates="product")
 
 class Category(Base):
     __tablename__ = "categories"
@@ -56,3 +57,4 @@ class Supplier(Base):
     
     # Relationships
     products = relationship("Product", back_populates="supplier")
+    orders = relationship("Order", back_populates="supplier")

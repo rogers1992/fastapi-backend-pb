@@ -37,3 +37,4 @@ class Warehouse(Base):
     
     # Relationships
     inventory_items = relationship("InventoryItem", back_populates="warehouse")
+    orders = relationship("Order", back_populates="warehouse")

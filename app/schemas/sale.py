@@ -15,6 +15,7 @@ class SaleItemCreate(SaleItemBase):
 class SaleItemResponse(SaleItemBase):
     id: int
     sale_id: int
+    product_name: str
     total_price: Decimal
     
     class Config:

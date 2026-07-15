@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from sqlalchemy import text
 from .config import settings
-from .api import auth, products, inventory, sales, customers, users, roles, categories, suppliers, warehouses, notifications
+from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard
 from .database import engine, Base
 
 
@@ -38,7 +38,49 @@ def _ensure_products_image_url_column() -> None:
         conn.commit()
 
 
+def _ensure_customer_is_active_column() -> None:
+    """
+    Backfill the customers.is_active column on DBs that predate it.
+    Same pattern as _ensure_products_image_url_column().
+    """
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT to_regclass('public.customers')")
+        ).scalar()
+        if exists is None:
+            return
+        conn.execute(
+            text(
+                "ALTER TABLE customers "
+                "ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1 NOT NULL"
+            )
+        )
+        conn.commit()
+
+
+def _ensure_orders_total_amount_column() -> None:
+    """
+    Backfill the orders.total_amount column on DBs that predate it.
+    Matches the pattern used for the image_url and is_active backfills.
+    """
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT to_regclass('public.orders')")
+        ).scalar()
+        if exists is None:
+            return  # create_all will build the table with the column present
+        conn.execute(
+            text(
+                "ALTER TABLE orders "
+                "ADD COLUMN IF NOT EXISTS total_amount DECIMAL(10,2) DEFAULT 0"
+            )
+        )
+        conn.commit()
+
+
 _ensure_products_image_url_column()
+_ensure_customer_is_active_column()
+_ensure_orders_total_amount_column()
 Base.metadata.create_all(bind=engine)
 
 # Ensure the upload directory exists before mounting StaticFiles.
@@ -79,8 +121,11 @@ app.include_router(products.router, prefix="/api/products", tags=["Products"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"])
 app.include_router(warehouses.router, prefix="/api/warehouses", tags=["Warehouses"])
 app.include_router(sales.router, prefix="/api/sales", tags=["Sales"])
+app.include_router(purchases.router, prefix="/api/purchases", tags=["Purchases"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
+app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 
 # Serve uploaded product images (and any future uploads) as static files.
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

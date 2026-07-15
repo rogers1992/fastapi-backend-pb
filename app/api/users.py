@@ -16,7 +16,7 @@ router = APIRouter()
 @router.get("/", response_model=List[UserWithRoleResponse])
 async def list_users(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     role_id: Optional[int] = None,
     is_active: Optional[bool] = None,

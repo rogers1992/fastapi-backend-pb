@@ -21,9 +21,28 @@ class CustomerUpdate(BaseModel):
     address: Optional[str] = None
     date_of_birth: Optional[date] = None
 
-class CustomerResponse(CustomerBase):
+class LoyaltyResponse(BaseModel):
     id: int
-    created_at: datetime
+    points: int
+    tier: str
+    last_updated: Optional[datetime] = None
     
     class Config:
         from_attributes = True
+
+class CustomerResponse(CustomerBase):
+    id: int
+    is_active: int
+    created_at: datetime
+    loyalty: Optional[LoyaltyResponse] = None
+    
+    class Config:
+        from_attributes = True
+
+class LoyaltyUpdate(BaseModel):
+    points: Optional[int] = None
+    tier: Optional[str] = None
+
+class LoyaltyAdjust(BaseModel):
+    points_change: int
+    reason: Optional[str] = None
