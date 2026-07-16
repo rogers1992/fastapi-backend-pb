@@ -10,6 +10,7 @@ from ..schemas.product import ProductCreate, ProductResponse, ProductUpdate
 from ..core.dependencies import require_permission
 from ..models.user import User
 from ..config import settings
+from ..supabase import get_supabase
 
 from sqlalchemy import func
 
@@ -138,13 +139,6 @@ async def delete_product(
     return {"message": "Product deleted successfully"}
 
 
-def _resolve_upload_root() -> Path:
-    """Directory where product images are stored, created if missing."""
-    root = Path(settings.UPLOAD_DIR) / "products"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
-
 @router.post("/{product_id}/image")
 async def upload_product_image(
     product_id: int,
@@ -156,8 +150,7 @@ async def upload_product_image(
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Validate content type. Some clients send generic octet-stream, so
-    # fall back to the file extension when the header is unhelpful.
+    # Validate content type
     ctype = (file.content_type or "").lower()
     if ctype not in ALLOWED_IMAGE_TYPES:
         ext = Path(file.filename or "").suffix.lower()
@@ -167,7 +160,7 @@ async def upload_product_image(
                 detail="El archivo debe ser una imagen (jpg, png, webp o gif).",
             )
 
-    # Read bytes with size guard.
+    # Read bytes with size guard
     contents = await file.read()
     if len(contents) > settings.MAX_IMAGE_SIZE_BYTES:
         raise HTTPException(
@@ -180,25 +173,33 @@ async def upload_product_image(
             detail="El archivo esta vacio.",
         )
 
-    # Build a stable filename: {product_id}_{timestamp}.{ext}
+    # Build filename
     ext = Path(file.filename or "").suffix.lower() or ".jpg"
     if ext == ".jpeg":
         ext = ".jpg"
-    filename = f"{product_id}_{int(time.time())}{ext}"
-    save_path = _resolve_upload_root() / filename
-    save_path.write_bytes(contents)
+    path = f"{product_id}_{int(time.time())}{ext}"
 
-    # Remove any previous image file (keep the directory clean).
-    if db_product.image_url:
-        old_rel = db_product.image_url.lstrip("/")
-        old_abs = Path(settings.UPLOAD_DIR).parent / old_rel
-        if old_abs.exists() and old_abs.is_file() and "products" in old_abs.parts:
-            try:
-                old_abs.unlink()
-            except OSError:
-                pass  # best-effort cleanup
+    # Delete old image from Supabase (if exists)
+    if db_product.image_url and "supabase.co" in db_product.image_url:
+        try:
+            old_path = db_product.image_url.split("/objects/")[1].split("?")[0]
+            if old_path.startswith("paraiso_biker/"):
+                old_path = old_path[len("paraiso_biker/"):]
+            get_supabase().storage.from_("paraiso_biker").remove([old_path])
+        except Exception:
+            pass
 
-    db_product.image_url = f"/uploads/products/{filename}"
+    # Upload to Supabase Storage
+    supabase = get_supabase()
+    supabase.storage.from_("paraiso_biker").upload(
+        path,
+        contents,
+        {"content-type": file.content_type or "image/jpeg", "upsert": "true"},
+    )
+
+    # Get public URL
+    image_url = supabase.storage.from_("paraiso_biker").get_public_url(path)
+    db_product.image_url = image_url
     db.commit()
     db.refresh(db_product)
     return {"image_url": db_product.image_url}
@@ -217,12 +218,14 @@ async def delete_product_image(
     if not db_product.image_url:
         return {"message": "El producto no tiene imagen."}
 
-    old_rel = db_product.image_url.lstrip("/")
-    old_abs = Path(settings.UPLOAD_DIR).parent / old_rel
-    if old_abs.exists() and old_abs.is_file() and "products" in old_abs.parts:
+    # Delete from Supabase Storage
+    if "supabase.co" in db_product.image_url:
         try:
-            old_abs.unlink()
-        except OSError:
+            path = db_product.image_url.split("/objects/")[1].split("?")[0]
+            if path.startswith("paraiso_biker/"):
+                path = path[len("paraiso_biker/"):]
+            get_supabase().storage.from_("paraiso_biker").remove([path])
+        except Exception:
             pass
 
     db_product.image_url = None

@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     SEED_DEFAULTS: bool = False
     UPLOAD_DIR: str = "app/uploads"
     MAX_IMAGE_SIZE_BYTES: int = 5_242_880  # 5 MB
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
 
     class Config:
         env_file = ".env"
