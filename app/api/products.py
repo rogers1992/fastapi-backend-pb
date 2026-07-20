@@ -11,15 +11,12 @@ from ..core.dependencies import require_permission
 from ..models.user import User
 from ..config import settings
 from ..supabase import get_supabase
+from ..services.image_service import compress_image, get_compressed_filename
 
 from sqlalchemy import func
+from ..services.image_service import ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTS
 
 router = APIRouter()
-
-ALLOWED_IMAGE_TYPES = {
-    "image/jpeg", "image/png", "image/webp", "image/gif",
-}
-ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 @router.get("/")
@@ -173,11 +170,21 @@ async def upload_product_image(
             detail="El archivo esta vacio.",
         )
 
-    # Build filename
-    ext = Path(file.filename or "").suffix.lower() or ".jpg"
-    if ext == ".jpeg":
-        ext = ".jpg"
-    path = f"{product_id}_{int(time.time())}{ext}"
+    # Compress and convert to WebP
+    try:
+        contents = compress_image(
+            contents,
+            max_width=settings.IMAGE_MAX_WIDTH,
+            webp_quality=settings.IMAGE_WEBP_QUALITY,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo procesar la imagen.",
+        )
+
+    # Build filename (always .webp)
+    path = get_compressed_filename(db_product.sku, int(time.time()), folder="products")
 
     # Delete old image from Supabase (if exists)
     if db_product.image_url and "supabase.co" in db_product.image_url:
@@ -194,7 +201,7 @@ async def upload_product_image(
     supabase.storage.from_("paraiso_biker").upload(
         path,
         contents,
-        {"content-type": file.content_type or "image/jpeg", "upsert": "true"},
+        {"content-type": "image/webp", "upsert": "true"},
     )
 
     # Get public URL

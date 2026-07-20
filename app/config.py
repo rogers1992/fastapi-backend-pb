@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     SEED_DEFAULTS: bool = False
     UPLOAD_DIR: str = "app/uploads"
-    MAX_IMAGE_SIZE_BYTES: int = 5_242_880  # 5 MB
+    MAX_IMAGE_SIZE_BYTES: int = 2_097_152  # 2 MB
+    IMAGE_MAX_WIDTH: int = 1200
+    IMAGE_WEBP_QUALITY: int = 80
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
