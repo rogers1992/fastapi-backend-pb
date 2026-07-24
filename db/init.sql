@@ -145,7 +145,7 @@ CREATE TABLE sale_items (
 -- 12. Orders Table (Purchase Orders)
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
-    supplier_id INTEGER REFERENCES suppliers(id),
+    supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
     warehouse_id INTEGER REFERENCES warehouses(id),
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     total_amount DECIMAL(10,2) DEFAULT 0,

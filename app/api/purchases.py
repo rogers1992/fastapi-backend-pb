@@ -58,10 +58,11 @@ async def create_purchase(
     current_user: User = Depends(require_permission("purchases", "create")),
 ):
     # Validate supplier
-    if order.supplier_id:
-        supplier = db.query(Supplier).filter(Supplier.id == order.supplier_id).first()
-        if not supplier:
-            raise HTTPException(status_code=400, detail="Invalid supplier_id")
+    if not order.supplier_id:
+        raise HTTPException(status_code=400, detail="supplier_id (proveedor) es requerido")
+    supplier = db.query(Supplier).filter(Supplier.id == order.supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=400, detail="supplier_id no existe")
 
     # Validate warehouse
     warehouse = db.query(Warehouse).filter(Warehouse.id == order.warehouse_id).first()

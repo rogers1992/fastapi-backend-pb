@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime, date
 from typing import List, Optional
 from decimal import Decimal
@@ -30,6 +30,15 @@ class OrderBase(BaseModel):
     warehouse_id: int
     expected_date: Optional[date] = None
     notes: Optional[str] = None
+
+    @field_validator("supplier_id")
+    @classmethod
+    def supplier_id_required(cls, v):
+        if v is None:
+            raise ValueError("supplier_id is required")
+        if v <= 0:
+            raise ValueError("supplier_id must be a positive integer")
+        return v
 
 
 class OrderCreate(OrderBase):

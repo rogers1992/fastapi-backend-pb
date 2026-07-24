@@ -19,6 +19,18 @@ from ..services.image_service import ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTS
 router = APIRouter()
 
 
+def _delete_supabase_image(image_url: str | None) -> None:
+    if not image_url or "supabase.co" not in image_url:
+        return
+    try:
+        path = image_url.split("/objects/")[1].split("?")[0]
+        if path.startswith("paraiso_biker/"):
+            path = path[len("paraiso_biker/"):]
+        get_supabase().storage.from_("paraiso_biker").remove([path])
+    except Exception:
+        pass
+
+
 @router.get("/")
 async def get_products(
     skip: int = 0,
@@ -106,6 +118,11 @@ async def update_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     update_data = product.model_dump(exclude_unset=True)
+    if "image_url" in update_data:
+        new_url = update_data["image_url"]
+        old_url = db_product.image_url
+        if old_url and old_url != new_url:
+            _delete_supabase_image(old_url)
     for key, value in update_data.items():
         setattr(db_product, key, value)
 
@@ -130,6 +147,8 @@ async def delete_product(
     db_product = db.query(Product).filter(Product.id == product_id).first()
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    _delete_supabase_image(db_product.image_url)
 
     db_product.is_active = False
     db.commit()
@@ -187,14 +206,7 @@ async def upload_product_image(
     path = get_compressed_filename(db_product.sku, int(time.time()), folder="products")
 
     # Delete old image from Supabase (if exists)
-    if db_product.image_url and "supabase.co" in db_product.image_url:
-        try:
-            old_path = db_product.image_url.split("/objects/")[1].split("?")[0]
-            if old_path.startswith("paraiso_biker/"):
-                old_path = old_path[len("paraiso_biker/"):]
-            get_supabase().storage.from_("paraiso_biker").remove([old_path])
-        except Exception:
-            pass
+    _delete_supabase_image(db_product.image_url)
 
     # Upload to Supabase Storage
     supabase = get_supabase()
@@ -226,14 +238,7 @@ async def delete_product_image(
         return {"message": "El producto no tiene imagen."}
 
     # Delete from Supabase Storage
-    if "supabase.co" in db_product.image_url:
-        try:
-            path = db_product.image_url.split("/objects/")[1].split("?")[0]
-            if path.startswith("paraiso_biker/"):
-                path = path[len("paraiso_biker/"):]
-            get_supabase().storage.from_("paraiso_biker").remove([path])
-        except Exception:
-            pass
+    _delete_supabase_image(db_product.image_url)
 
     db_product.image_url = None
     db.commit()
