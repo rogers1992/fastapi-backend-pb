@@ -21,17 +21,25 @@ from ..schemas.report import (
     SalesReportRow,
 )
 from ..services.report_service import (
+    ABC_REPORT_HEADERS,
     CUSTOMERS_REPORT_HEADERS,
     INVENTORY_REPORT_HEADERS,
+    PROFIT_REPORT_HEADERS,
     PRODUCTS_REPORT_HEADERS,
     PURCHASES_REPORT_HEADERS,
     SALES_REPORT_HEADERS,
+    SELLERS_REPORT_HEADERS,
+    SLOW_MOVING_REPORT_HEADERS,
+    abc_report,
     customers_report,
     inventory_report,
     products_report,
+    profit_report,
     purchases_report,
     rows_to_csv_response,
     sales_report,
+    sellers_report,
+    slow_moving_report,
 )
 
 router = APIRouter()
@@ -68,7 +76,7 @@ async def get_inventory_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
 ):
-    rows = inventory_report(db)
+    rows = inventory_report(db, current_user)
     if format == "csv":
         return rows_to_csv_response(rows, INVENTORY_REPORT_HEADERS, "inventory_report.csv")
     return JSONResponse(content=rows)
@@ -115,14 +123,70 @@ async def get_products_report(
     return JSONResponse(content=rows)
 
 
+@router.get("/profit")
+async def get_profit_report(
+    from_date: Optional[date] = Query(None, alias="from"),
+    to_date: Optional[date] = Query(None, alias="to"),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("reports", "read")),
+):
+    rows = profit_report(db, current_user, from_date=from_date, to_date=to_date)
+    if format == "csv":
+        return rows_to_csv_response(rows, PROFIT_REPORT_HEADERS, "profit_report.csv")
+    return JSONResponse(content=rows)
+
+
+@router.get("/abc")
+async def get_abc_report(
+    from_date: Optional[date] = Query(None, alias="from"),
+    to_date: Optional[date] = Query(None, alias="to"),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("reports", "read")),
+):
+    rows = abc_report(db, current_user, from_date=from_date, to_date=to_date)
+    if format == "csv":
+        return rows_to_csv_response(rows, ABC_REPORT_HEADERS, "abc_report.csv")
+    return JSONResponse(content=rows)
+
+
+@router.get("/slow-moving")
+async def get_slow_moving_report(
+    threshold_days: int = Query(90, ge=1, le=3650),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("reports", "read")),
+):
+    rows = slow_moving_report(db, threshold_days=threshold_days)
+    if format == "csv":
+        return rows_to_csv_response(rows, SLOW_MOVING_REPORT_HEADERS, "slow_moving_report.csv")
+    return JSONResponse(content=rows)
+
+
+@router.get("/sellers")
+async def get_sellers_report(
+    from_date: Optional[date] = Query(None, alias="from"),
+    to_date: Optional[date] = Query(None, alias="to"),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("reports", "read")),
+):
+    rows = sellers_report(db, current_user, from_date=from_date, to_date=to_date)
+    if format == "csv":
+        return rows_to_csv_response(rows, SELLERS_REPORT_HEADERS, "sellers_report.csv")
+    return JSONResponse(content=rows)
+
+
 @router.get("/export")
 async def export_report(
-    report: str = Query(..., pattern="^(sales|inventory|purchases|customers|products)$"),
+    report: str = Query(..., pattern="^(sales|inventory|purchases|customers|products|profit|abc|slow-moving|sellers)$"),
     from_date: Optional[date] = Query(None, alias="from"),
     to_date: Optional[date] = Query(None, alias="to"),
     seller_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    threshold_days: Optional[int] = Query(None, ge=1, le=3650),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
 ):
@@ -133,6 +197,10 @@ async def export_report(
         "purchases": (purchases_report, PURCHASES_REPORT_HEADERS, "purchases_report.csv"),
         "customers": (customers_report, CUSTOMERS_REPORT_HEADERS, "customers_report.csv"),
         "products": (products_report, PRODUCTS_REPORT_HEADERS, "products_report.csv"),
+        "profit": (profit_report, PROFIT_REPORT_HEADERS, "profit_report.csv"),
+        "abc": (abc_report, ABC_REPORT_HEADERS, "abc_report.csv"),
+        "slow-moving": (slow_moving_report, SLOW_MOVING_REPORT_HEADERS, "slow_moving_report.csv"),
+        "sellers": (sellers_report, SELLERS_REPORT_HEADERS, "sellers_report.csv"),
     }
     if report not in table:
         raise HTTPException(status_code=400, detail="Unknown report type")
@@ -141,10 +209,14 @@ async def export_report(
 
     if report == "sales":
         rows = fn(db, current_user, from_date=from_date, to_date=to_date, seller_id=seller_id, customer_id=customer_id)
-    elif report == "products":
+    elif report in ("products", "profit", "abc", "sellers"):
         rows = fn(db, current_user, from_date=from_date, to_date=to_date)
+    elif report == "slow-moving":
+        rows = fn(db, threshold_days=threshold_days if threshold_days is not None else 90)
     elif report == "purchases":
         rows = fn(db, from_date=from_date, to_date=to_date, status=status)
+    elif report == "inventory":
+        rows = fn(db, current_user)
     else:
         rows = fn(db)
 

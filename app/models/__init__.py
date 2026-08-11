@@ -1,3 +1,4 @@
+from .associations import user_warehouses
 from .user import User, Role
 from .product import Product, Category, Supplier
 from .inventory import InventoryItem, Warehouse

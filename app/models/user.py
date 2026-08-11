@@ -2,7 +2,9 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, T
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from typing import List
 from ..database import Base
+from .associations import user_warehouses
 
 class User(Base):
     __tablename__ = "users"
@@ -23,6 +25,16 @@ class User(Base):
     role = relationship("Role", back_populates="users", lazy="joined")
     sales = relationship("Sale", back_populates="user")
     orders = relationship("Order", back_populates="user")
+    warehouses = relationship(
+        "Warehouse",
+        secondary=user_warehouses,
+        back_populates="users",
+        lazy="joined"
+    )
+
+    @property
+    def warehouse_ids(self) -> List[int]:
+        return [w.id for w in self.warehouses] if self.warehouses else []
 
 class Role(Base):
     __tablename__ = "roles"

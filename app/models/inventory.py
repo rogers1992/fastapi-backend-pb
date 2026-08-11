@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
+from .associations import user_warehouses
 
 class InventoryItem(Base):
     __tablename__ = "inventory_items"
@@ -38,3 +39,4 @@ class Warehouse(Base):
     # Relationships
     inventory_items = relationship("InventoryItem", back_populates="warehouse")
     orders = relationship("Order", back_populates="warehouse")
+    users = relationship("User", secondary=user_warehouses, back_populates="warehouses")

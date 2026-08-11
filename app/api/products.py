@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import List
+from typing import List, Optional
+from decimal import Decimal
 import time
 from pathlib import Path
 from ..database import get_db
-from ..models.product import Product, Category, Supplier
-from ..schemas.product import ProductCreate, ProductResponse, ProductUpdate
+from ..models.product import Product, Category, Supplier, ProductImage
+from ..models.order import Order, OrderItem
+from ..schemas.product import ProductCreate, ProductResponse, ProductUpdate, ProductImageCreate, ProductImageResponse
 from ..core.dependencies import require_permission
 from ..models.user import User
 from ..config import settings
@@ -17,6 +19,37 @@ from sqlalchemy import func
 from ..services.image_service import ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTS
 
 router = APIRouter()
+
+
+# Roles allowed to see product cost data (purchase-side financials).
+_COST_VISIBILITY_ROLES = {"admin", "gerente"}
+
+
+def _user_can_see_cost(user: User) -> bool:
+    return bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
+
+
+def _latest_cost_subquery():
+    """Latest received OrderItem.unit_cost per product, correlated on Product.id."""
+    from sqlalchemy import select
+    return (
+        select(OrderItem.unit_cost)
+        .select_from(OrderItem)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(OrderItem.product_id == Product.id)
+        .where(Order.status == "received")
+        .where(Order.received_date.isnot(None))
+        .order_by(Order.received_date.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def _row_num_or_none(value) -> Optional[float]:
+    if value is None:
+        return None
+    return float(value)
+
 
 
 def _delete_supabase_image(image_url: str | None) -> None:
@@ -36,10 +69,15 @@ async def get_products(
     skip: int = 0,
     limit: int = 10,
     search: str | None = None,
+    include_inactive: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    query = db.query(Product).filter(Product.is_active == True)
+    cost_subq = _latest_cost_subquery()
+    from sqlalchemy.orm import joinedload
+    query = db.query(Product, cost_subq.label("current_cost")).options(joinedload(Product.images))
+    if not include_inactive:
+        query = query.filter(Product.is_active == True)
 
     if search:
         search_pattern = f"%{search}%"
@@ -50,10 +88,42 @@ async def get_products(
         )
 
     total = query.with_entities(func.count(Product.id)).scalar()
-    products = query.offset(skip).limit(limit).all()
+    rows = query.offset(skip).limit(limit).all()
+
+    can_see_cost = _user_can_see_cost(current_user)
+    items = []
+    for product, current_cost in rows:
+        images_data = []
+        for img in product.images:
+            images_data.append({
+                "id": img.id,
+                "product_id": img.product_id,
+                "image_url": img.image_url,
+                "is_primary": img.is_primary,
+                "sort_order": img.sort_order,
+                "created_at": img.created_at,
+            })
+        
+        items.append({
+            "id": product.id,
+            "name": product.name,
+            "sku": product.sku,
+            "barcode": product.barcode,
+            "description": product.description,
+            "unit_price": product.unit_price,
+            "weight": product.weight,
+            "image_url": product.image_url,
+            "category_id": product.category_id,
+            "supplier_id": product.supplier_id,
+            "is_active": product.is_active,
+            "created_at": product.created_at,
+            "updated_at": product.updated_at,
+            "current_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+            "images": images_data,
+        })
 
     return {
-        "items": products,
+        "items": items,
         "total_items": total,
         "current_page": (skip // limit) + 1,
         "page_size": limit,
@@ -68,10 +138,50 @@ async def get_product(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
+    cost_subq = _latest_cost_subquery()
+    from sqlalchemy.orm import joinedload
+    row = (
+        db.query(Product, cost_subq.label("current_cost"))
+        .options(joinedload(Product.images))
+        .filter(
+            Product.id == product_id,
+            Product.is_active == True,
+        )
+        .first()
+    )
+    if not row:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    product, current_cost = row
+    can_see_cost = _user_can_see_cost(current_user)
+    
+    images_data = []
+    for img in product.images:
+        images_data.append({
+            "id": img.id,
+            "product_id": img.product_id,
+            "image_url": img.image_url,
+            "is_primary": img.is_primary,
+            "sort_order": img.sort_order,
+            "created_at": img.created_at,
+        })
+    
+    return {
+        "id": product.id,
+        "name": product.name,
+        "sku": product.sku,
+        "barcode": product.barcode,
+        "description": product.description,
+        "unit_price": product.unit_price,
+        "weight": product.weight,
+        "image_url": product.image_url,
+        "category_id": product.category_id,
+        "supplier_id": product.supplier_id,
+        "is_active": product.is_active,
+        "created_at": product.created_at,
+        "updated_at": product.updated_at,
+        "current_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+        "images": images_data,
+    }
 
 
 @router.get("/barcode/{barcode}", response_model=ProductResponse)
@@ -80,10 +190,50 @@ async def get_product_by_barcode(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    product = db.query(Product).filter(Product.barcode == barcode).first()
-    if not product:
+    cost_subq = _latest_cost_subquery()
+    from sqlalchemy.orm import joinedload
+    row = (
+        db.query(Product, cost_subq.label("current_cost"))
+        .options(joinedload(Product.images))
+        .filter(
+            Product.barcode == barcode,
+            Product.is_active == True,
+        )
+        .first()
+    )
+    if not row:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    product, current_cost = row
+    can_see_cost = _user_can_see_cost(current_user)
+    
+    images_data = []
+    for img in product.images:
+        images_data.append({
+            "id": img.id,
+            "product_id": img.product_id,
+            "image_url": img.image_url,
+            "is_primary": img.is_primary,
+            "sort_order": img.sort_order,
+            "created_at": img.created_at,
+        })
+    
+    return {
+        "id": product.id,
+        "name": product.name,
+        "sku": product.sku,
+        "barcode": product.barcode,
+        "description": product.description,
+        "unit_price": product.unit_price,
+        "weight": product.weight,
+        "image_url": product.image_url,
+        "category_id": product.category_id,
+        "supplier_id": product.supplier_id,
+        "is_active": product.is_active,
+        "created_at": product.created_at,
+        "updated_at": product.updated_at,
+        "current_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+        "images": images_data,
+    }
 
 
 @router.post("/", response_model=ProductResponse)
@@ -242,4 +392,196 @@ async def delete_product_image(
 
     db_product.image_url = None
     db.commit()
+    return {"message": "Imagen eliminada exitosamente."}
+
+
+# Product Images CRUD Endpoints
+
+@router.get("/{product_id}/images", response_model=List[ProductImageResponse])
+async def get_product_images(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("products", "read")),
+):
+    db_product = db.query(Product).filter(Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    images = db.query(ProductImage).filter(
+        ProductImage.product_id == product_id
+    ).order_by(ProductImage.sort_order, ProductImage.id).all()
+    
+    return images
+
+
+@router.post("/{product_id}/images", response_model=ProductImageResponse)
+async def upload_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    is_primary: bool = False,
+    sort_order: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("products", "update")),
+):
+    db_product = db.query(Product).filter(Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Validate content type
+    ctype = (file.content_type or "").lower()
+    if ctype not in ALLOWED_IMAGE_TYPES:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext not in ALLOWED_IMAGE_EXTS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo debe ser una imagen (jpg, png, webp o gif).",
+            )
+
+    # Read bytes with size guard
+    contents = await file.read()
+    if len(contents) > settings.MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La imagen excede el tamano maximo permitido ({settings.MAX_IMAGE_SIZE_BYTES // (1024 * 1024)} MB).",
+        )
+    if not contents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El archivo esta vacio.",
+        )
+
+    # Compress and convert to WebP
+    try:
+        contents = compress_image(
+            contents,
+            max_width=settings.IMAGE_MAX_WIDTH,
+            webp_quality=settings.IMAGE_WEBP_QUALITY,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo procesar la imagen.",
+        )
+
+    # Build filename
+    timestamp = int(time.time())
+    path = get_compressed_filename(db_product.sku, timestamp, folder="products")
+
+    # If this is marked as primary, unset other primary images
+    if is_primary:
+        db.query(ProductImage).filter(
+            ProductImage.product_id == product_id,
+            ProductImage.is_primary == True
+        ).update({"is_primary": False})
+
+    # Upload to Supabase Storage
+    supabase = get_supabase()
+    supabase.storage.from_("paraiso_biker").upload(
+        path,
+        contents,
+        {"content-type": "image/webp", "upsert": "true"},
+    )
+
+    # Get public URL
+    image_url = supabase.storage.from_("paraiso_biker").get_public_url(path)
+    
+    # Create ProductImage record
+    new_image = ProductImage(
+        product_id=product_id,
+        image_url=image_url,
+        is_primary=is_primary,
+        sort_order=sort_order,
+    )
+    db.add(new_image)
+    
+    # Update main product image_url if this is the first image or is primary
+    if not db_product.image_url or is_primary:
+        db_product.image_url = image_url
+    
+    db.commit()
+    db.refresh(new_image)
+    
+    return new_image
+
+
+@router.put("/{product_id}/images/{image_id}", response_model=ProductImageResponse)
+async def update_product_image(
+    product_id: int,
+    image_id: int,
+    is_primary: Optional[bool] = None,
+    sort_order: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("products", "update")),
+):
+    db_product = db.query(Product).filter(Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    image = db.query(ProductImage).filter(
+        ProductImage.id == image_id,
+        ProductImage.product_id == product_id
+    ).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    if is_primary is not None:
+        if is_primary:
+            # Unset other primary images
+            db.query(ProductImage).filter(
+                ProductImage.product_id == product_id,
+                ProductImage.is_primary == True,
+                ProductImage.id != image_id
+            ).update({"is_primary": False})
+            image.is_primary = True
+            # Update main product image
+            db_product.image_url = image.image_url
+        else:
+            image.is_primary = False
+    
+    if sort_order is not None:
+        image.sort_order = sort_order
+    
+    db.commit()
+    db.refresh(image)
+    
+    return image
+
+
+@router.delete("/{product_id}/images/{image_id}")
+async def delete_product_image_v2(
+    product_id: int,
+    image_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("products", "update")),
+):
+    db_product = db.query(Product).filter(Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    image = db.query(ProductImage).filter(
+        ProductImage.id == image_id,
+        ProductImage.product_id == product_id
+    ).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Delete from Supabase
+    _delete_supabase_image(image.image_url)
+    
+    # If this was the primary image, set another image as primary
+    if image.is_primary:
+        other_image = db.query(ProductImage).filter(
+            ProductImage.product_id == product_id,
+            ProductImage.id != image_id
+        ).order_by(ProductImage.sort_order, ProductImage.id).first()
+        
+        if other_image:
+            other_image.is_primary = True
+            db_product.image_url = other_image.image_url
+        else:
+            db_product.image_url = None
+    
+    db.delete(image)
+    db.commit()
+    
     return {"message": "Imagen eliminada exitosamente."}

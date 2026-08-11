@@ -15,6 +15,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(min_length=6)
     role_id: int
+    warehouse_ids: Optional[List[int]] = None
 
 
 class UserUpdate(BaseModel):
@@ -23,6 +24,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     role_id: Optional[int] = None
+    warehouse_ids: Optional[List[int]] = None
 
 
 class UserPasswordReset(BaseModel):
@@ -51,6 +53,7 @@ class UserWithRoleResponse(UserBase):
     last_login: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    warehouse_ids: List[int] = []
 
     class Config:
         from_attributes = True

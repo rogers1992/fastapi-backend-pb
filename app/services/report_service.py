@@ -29,6 +29,10 @@ from ..models.sale import Sale, SaleItem
 from ..models.user import Role, User
 
 
+# Roles allowed to see product cost data (purchase-side financials).
+_COST_VISIBILITY_ROLES = {"admin", "gerente"}
+
+
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -76,6 +80,13 @@ def _row_num(value) -> float:
     """
     if value is None:
         return 0.0
+    return float(value)
+
+
+def _row_num_or_none(value) -> Optional[float]:
+    """Coerce a SQLAlchemy scalar to float or None for JSON-serializable row dicts."""
+    if value is None:
+        return None
     return float(value)
 
 
@@ -472,10 +483,33 @@ def sales_report(
     ]
 
 
-def inventory_report(db: Session) -> List[dict]:
+_COST_VISIBILITY_ROLES = {"admin", "gerente"}
+
+
+def _latest_cost_subquery():
+    """Latest received OrderItem.unit_cost per product, correlated on Product.id."""
+    from sqlalchemy import select
+    return (
+        select(OrderItem.unit_cost)
+        .select_from(OrderItem)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(OrderItem.product_id == Product.id)
+        .where(Order.status == "received")
+        .where(Order.received_date.isnot(None))
+        .order_by(Order.received_date.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def inventory_report(db: Session, user: User) -> List[dict]:
+    cost_subq = _latest_cost_subquery()
+    can_see_cost = bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
+
     rows = (
         db.query(
             InventoryItem, Product, Category, Warehouse,
+            cost_subq.label("current_cost"),
         )
         .join(Product, Product.id == InventoryItem.product_id)
         .outerjoin(Category, Category.id == Product.category_id)
@@ -499,10 +533,12 @@ def inventory_report(db: Session) -> List[dict]:
             "max_stock_level": inv.max_stock_level,
             "unit_price": float(prod.unit_price or 0),
             "stock_value": float((prod.unit_price or 0) * inv.quantity),
+            "unit_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+            "stock_value_at_cost": _row_num_or_none(current_cost * inv.quantity) if (can_see_cost and current_cost is not None) else None,
             "is_low_stock": inv.min_stock_level is not None and inv.quantity <= inv.min_stock_level,
             "is_out_of_stock": inv.quantity <= 0,
         }
-        for inv, prod, cat, wh in rows
+        for inv, prod, cat, wh, current_cost in rows
     ]
 
 
@@ -669,6 +705,264 @@ def products_report(
     ]
 
 
+def profit_report(
+    db: Session,
+    user: User,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+) -> List[dict]:
+    """Per-product gross profit using historical COGS.
+
+    COGS per sale item is inferred from the most recent received Order's
+    unit_cost for that product, scoped to purchases received at or before
+    the sale date. Products with sales but no recorded purchases report
+    COGS=0 (margin=100%, flagged in UI as needing cost data).
+    """
+    from_dt, to_dt = _coerce_range(from_date, to_date)
+
+    # Correlated subquery: latest unit_cost for a product at or before a sale date.
+    latest_cost_subq = (
+        db.query(OrderItem.unit_cost)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(OrderItem.product_id == SaleItem.product_id)
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .filter(Order.received_date <= Sale.sale_date)
+        .order_by(Order.received_date.desc())
+        .limit(1)
+    ).scalar_subquery()
+
+    q = (
+        db.query(
+            Product.id,
+            Product.name,
+            Product.sku,
+            func.coalesce(func.sum(SaleItem.quantity), 0),
+            func.coalesce(func.sum(SaleItem.total_price), 0),
+            func.coalesce(func.sum(SaleItem.quantity * latest_cost_subq), 0),
+        )
+        .join(SaleItem, SaleItem.product_id == Product.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .filter(Sale.status == "completed")
+    )
+    if from_dt is not None:
+        q = q.filter(Sale.sale_date >= from_dt)
+    if to_dt is not None:
+        q = q.filter(Sale.sale_date < to_dt)
+    q = _apply_sales_visibility(q, user)
+    rows = q.group_by(Product.id, Product.name, Product.sku).all()
+
+    return [
+        {
+            "product_id": int(r[0]),
+            "name": r[1],
+            "sku": r[2],
+            "units_sold": int(r[3] or 0),
+            "revenue": _row_num(r[4]),
+            "cogs": _row_num(r[5]),
+            "gross_profit": _row_num((r[4] or 0) - (r[5] or 0)),
+            "margin_pct": _row_num(
+                (((r[4] or 0) - (r[5] or 0)) / r[4] * 100) if r[4] else 0.0
+            ),
+        }
+        for r in rows
+    ]
+
+
+def abc_report(
+    db: Session,
+    user: User,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+) -> List[dict]:
+    """ABC classification by revenue contribution (Pareto).
+
+    A: cumulative revenue <= 80% of total.
+    B: cumulative revenue <= 95% of total.
+    C: remainder (bottom 5%).
+    """
+    from_dt, to_dt = _coerce_range(from_date, to_date)
+    q = (
+        db.query(
+            Product.id,
+            Product.name,
+            Product.sku,
+            func.coalesce(func.sum(SaleItem.quantity), 0),
+            func.coalesce(func.sum(SaleItem.total_price), 0),
+        )
+        .join(SaleItem, SaleItem.product_id == Product.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .filter(Sale.status == "completed")
+    )
+    if from_dt is not None:
+        q = q.filter(Sale.sale_date >= from_dt)
+    if to_dt is not None:
+        q = q.filter(Sale.sale_date < to_dt)
+    q = _apply_sales_visibility(q, user)
+    rows = (
+        q.group_by(Product.id, Product.name, Product.sku)
+        .order_by(func.sum(SaleItem.total_price).desc())
+        .all()
+    )
+
+    # Compute total revenue first to derive percentages.
+    total_revenue = sum((r[4] or 0) for r in rows)
+    cumulative = Decimal("0")
+    out: List[dict] = []
+    for r in rows:
+        product_id = int(r[0])
+        name = r[1]
+        sku = r[2]
+        units_sold = int(r[3] or 0)
+        revenue = _safe_dec(r[4])
+        revenue_pct = (revenue / total_revenue * 100) if total_revenue else Decimal("0")
+        cumulative += revenue
+        cumulative_pct = (cumulative / total_revenue * 100) if total_revenue else Decimal("0")
+        if cumulative_pct <= Decimal("80"):
+            abc_class = "A"
+        elif cumulative_pct <= Decimal("95"):
+            abc_class = "B"
+        else:
+            abc_class = "C"
+        out.append({
+            "product_id": product_id,
+            "name": name,
+            "sku": sku,
+            "revenue": _row_num(revenue),
+            "revenue_pct": _row_num(revenue_pct),
+            "cumulative_pct": _row_num(cumulative_pct),
+            "abc_class": abc_class,
+            "units_sold": units_sold,
+        })
+    return out
+
+
+def slow_moving_report(
+    db: Session,
+    threshold_days: int = 90,
+) -> List[dict]:
+    """Inventory rows with stock but no (or stale) sales activity.
+
+    A product+warehouse row is slow-moving if either it has never been sold
+    (last_sale_date IS NULL) or `days_since_last_sale >= threshold_days`.
+    No vendedor visibility filter — this is pure inventory data.
+    """
+    today = date.today()
+
+    last_sale_subq = (
+        db.query(
+            SaleItem.product_id,
+            func.max(Sale.sale_date).label("last_sale_date"),
+        )
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .filter(Sale.status == "completed")
+        .group_by(SaleItem.product_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(
+            InventoryItem.product_id,
+            Product.name,
+            Product.sku,
+            Category.name,
+            Warehouse.name,
+            InventoryItem.quantity,
+            last_sale_subq.c.last_sale_date,
+            Product.unit_price,
+        )
+        .join(Product, Product.id == InventoryItem.product_id)
+        .outerjoin(Category, Category.id == Product.category_id)
+        .join(Warehouse, Warehouse.id == InventoryItem.warehouse_id)
+        .outerjoin(last_sale_subq, last_sale_subq.c.product_id == InventoryItem.product_id)
+        .filter(InventoryItem.quantity > 0)
+        .order_by(Product.name.asc())
+        .all()
+    )
+
+    out: List[dict] = []
+    threshold_delta = timedelta(days=threshold_days)
+    for r in rows:
+        last_sale = r[6]
+        days_since: Optional[int] = None
+        if last_sale is not None:
+            days_since = (today - last_sale.date()).days if hasattr(last_sale, "date") else (today - last_sale).days
+
+        is_slow = last_sale is None or days_since is None or days_since >= threshold_days
+        if not is_slow:
+            continue
+
+        qty = int(r[5] or 0)
+        unit_price = float(r[7] or 0)
+        out.append({
+            "product_id": int(r[0]),
+            "name": r[1],
+            "sku": r[2],
+            "category_name": r[3],
+            "warehouse_name": r[4],
+            "quantity": qty,
+            "last_sale_date": last_sale.isoformat() if last_sale else None,
+            "days_since_last_sale": days_since,
+            "stock_value": _row_num(qty * unit_price),
+        })
+    return out
+
+
+def sellers_report(
+    db: Session,
+    user: User,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+) -> List[dict]:
+    """Per-seller aggregate: sales_count, units_sold, revenue, avg_ticket, tax.
+
+    Only users with at least 1 sale in range appear (Q2 decision). A
+    vendedor user only ever sees their own row (Q6 defensive filter).
+    """
+    from_dt, to_dt = _coerce_range(from_date, to_date)
+    q = (
+        db.query(
+            User.id,
+            User.first_name,
+            User.last_name,
+            Role.name,
+            func.count(Sale.id),
+            func.coalesce(func.sum(SaleItem.quantity), 0),
+            func.coalesce(func.sum(Sale.total_amount), 0),
+            func.coalesce(func.sum(Sale.tax_amount), 0),
+        )
+        .join(Sale, Sale.user_id == User.id)
+        .outerjoin(Role, Role.id == User.role_id)
+        .outerjoin(SaleItem, SaleItem.sale_id == Sale.id)
+        .filter(Sale.status == "completed")
+    )
+    if from_dt is not None:
+        q = q.filter(Sale.sale_date >= from_dt)
+    if to_dt is not None:
+        q = q.filter(Sale.sale_date < to_dt)
+    q = _apply_sales_visibility(q, user)
+    rows = (
+        q.group_by(User.id, User.first_name, User.last_name, Role.name)
+        .having(func.count(Sale.id) >= 1)
+        .order_by(func.sum(Sale.total_amount).desc())
+        .all()
+    )
+
+    return [
+        {
+            "seller_id": int(r[0]),
+            "seller_name": f"{r[1]} {r[2]}".strip(),
+            "role_name": r[3],
+            "sales_count": int(r[4] or 0),
+            "units_sold": int(r[5] or 0),
+            "revenue": _row_num(r[6]),
+            "avg_ticket": _row_num((r[6] or 0) / r[4]) if r[4] else 0.0,
+            "tax_collected": _row_num(r[7]),
+        }
+        for r in rows
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # CSV export
 # --------------------------------------------------------------------------- #
@@ -707,6 +1001,7 @@ INVENTORY_REPORT_HEADERS = [
     "product_id", "name", "sku", "category_id", "category_name",
     "warehouse_id", "warehouse_name", "quantity", "reserved_quantity",
     "min_stock_level", "max_stock_level", "unit_price", "stock_value",
+    "unit_cost", "stock_value_at_cost",
     "is_low_stock", "is_out_of_stock",
 ]
 PURCHASES_REPORT_HEADERS = [
@@ -721,4 +1016,20 @@ CUSTOMERS_REPORT_HEADERS = [
 PRODUCTS_REPORT_HEADERS = [
     "product_id", "name", "sku", "category_id", "category_name",
     "unit_price", "is_active", "units_sold", "revenue", "stock_quantity",
+]
+PROFIT_REPORT_HEADERS = [
+    "product_id", "name", "sku", "units_sold", "revenue",
+    "cogs", "gross_profit", "margin_pct",
+]
+ABC_REPORT_HEADERS = [
+    "product_id", "name", "sku", "revenue", "revenue_pct",
+    "cumulative_pct", "abc_class", "units_sold",
+]
+SLOW_MOVING_REPORT_HEADERS = [
+    "product_id", "name", "sku", "category_name", "warehouse_name",
+    "quantity", "last_sale_date", "days_since_last_sale", "stock_value",
+]
+SELLERS_REPORT_HEADERS = [
+    "seller_id", "seller_name", "role_name", "sales_count",
+    "units_sold", "revenue", "avg_ticket", "tax_collected",
 ]

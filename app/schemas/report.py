@@ -75,3 +75,48 @@ class ProductReportRow(BaseModel):
     units_sold: int
     revenue: Decimal
     stock_quantity: int
+
+
+class ProfitReportRow(BaseModel):
+    product_id: int
+    name: str
+    sku: Optional[str]
+    units_sold: int
+    revenue: Decimal
+    cogs: Decimal
+    gross_profit: Decimal
+    margin_pct: Decimal
+
+
+class ABCReportRow(BaseModel):
+    product_id: int
+    name: str
+    sku: Optional[str]
+    revenue: Decimal
+    revenue_pct: Decimal
+    cumulative_pct: Decimal
+    abc_class: str
+    units_sold: int
+
+
+class SlowMovingReportRow(BaseModel):
+    product_id: int
+    name: str
+    sku: Optional[str]
+    category_name: Optional[str]
+    warehouse_name: str
+    quantity: int
+    last_sale_date: Optional[datetime]
+    days_since_last_sale: Optional[int]
+    stock_value: Decimal
+
+
+class SellerReportRow(BaseModel):
+    seller_id: int
+    seller_name: str
+    role_name: Optional[str]
+    sales_count: int
+    units_sold: int
+    revenue: Decimal
+    avg_ticket: Decimal
+    tax_collected: Decimal
