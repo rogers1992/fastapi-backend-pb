@@ -37,6 +37,7 @@ from app.models.sale import Sale, SaleItem
 from app.models.customer import Customer, Loyalty
 from app.models.user import User, Role
 from app.core.security import get_password_hash
+from app.config import settings
 
 random.seed(42)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -534,7 +535,7 @@ for i in range(100):
             discount=discount, total_price=total_price,
         ))
 
-    tax = total * Decimal("0.16")
+    tax = total * Decimal(str(settings.TAX_RATE))
     sale.total_amount = total
     sale.tax_amount = tax
     sale_count += 1

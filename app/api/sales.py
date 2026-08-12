@@ -9,6 +9,7 @@ from ..schemas.sale import SaleCreate, SaleResponse
 from ..core.dependencies import get_current_user, require_permission
 from ..models.user import User
 from ..services.notification_service import NotificationService
+from ..config import settings
 from decimal import Decimal
 
 router = APIRouter()
@@ -93,7 +94,7 @@ async def create_sale(
     current_user: User = Depends(require_permission("sales", "create")),
 ):
     total_amount = Decimal(0)
-    tax_rate = Decimal(0.16)
+    tax_rate = Decimal(str(settings.TAX_RATE))
 
     db_sale = Sale(
         customer_id=sale.customer_id,

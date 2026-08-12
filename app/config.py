@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MAX_IMAGE_SIZE_BYTES: int = 2_097_152  # 2 MB
     IMAGE_MAX_WIDTH: int = 1200
     IMAGE_WEBP_QUALITY: int = 80
+    TAX_RATE: float = 0.16
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
