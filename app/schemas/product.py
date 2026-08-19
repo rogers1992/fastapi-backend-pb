@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional, List
 from decimal import Decimal
 
-class ProductImageBase(BaseModel):
+class ProductImageBase(BaseSchema):
     is_primary: Optional[bool] = False
     sort_order: Optional[int] = 0
 
@@ -19,7 +21,7 @@ class ProductImageResponse(ProductImageBase):
     class Config:
         from_attributes = True
 
-class ProductBase(BaseModel):
+class ProductBase(BaseSchema):
     name: str
     sku: str = ""
     barcode: Optional[str] = None
@@ -33,7 +35,7 @@ class ProductBase(BaseModel):
 class ProductCreate(ProductBase):
     pass
 
-class ProductUpdate(BaseModel):
+class ProductUpdate(BaseSchema):
     name: Optional[str] = None
     sku: Optional[str] = None
     barcode: Optional[str] = None

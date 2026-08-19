@@ -1,8 +1,10 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
+
+from . import BaseSchema
 from datetime import datetime, date
 from typing import Optional
 
-class CustomerBase(BaseModel):
+class CustomerBase(BaseSchema):
     first_name: str
     last_name: str
     email: Optional[EmailStr] = None
@@ -13,7 +15,7 @@ class CustomerBase(BaseModel):
 class CustomerCreate(CustomerBase):
     pass
 
-class CustomerUpdate(BaseModel):
+class CustomerUpdate(BaseSchema):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -21,7 +23,7 @@ class CustomerUpdate(BaseModel):
     address: Optional[str] = None
     date_of_birth: Optional[date] = None
 
-class LoyaltyResponse(BaseModel):
+class LoyaltyResponse(BaseSchema):
     id: int
     points: int
     tier: str
@@ -39,10 +41,10 @@ class CustomerResponse(CustomerBase):
     class Config:
         from_attributes = True
 
-class LoyaltyUpdate(BaseModel):
+class LoyaltyUpdate(BaseSchema):
     points: Optional[int] = None
     tier: Optional[str] = None
 
-class LoyaltyAdjust(BaseModel):
+class LoyaltyAdjust(BaseSchema):
     points_change: int
     reason: Optional[str] = None

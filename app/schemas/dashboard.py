@@ -1,10 +1,12 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
 
-class DashboardSummary(BaseModel):
+class DashboardSummary(BaseSchema):
     revenue_today: Decimal
     revenue_week: Decimal
     revenue_month: Decimal
@@ -12,6 +14,10 @@ class DashboardSummary(BaseModel):
     sales_count_month: int
     avg_ticket: Decimal
     tax_collected_month: Decimal
+    gross_profit_today: Decimal
+    gross_profit_month: Decimal
+    cogs_month: Decimal
+    margin_pct_month: Decimal
     low_stock_count: int
     pending_po_count: int
     active_customers: int
@@ -21,19 +27,21 @@ class DashboardSummary(BaseModel):
 
 
 class SalesTrendPoint(BaseModel):
+    """Uses BaseModel directly to avoid BaseSchema's datetime auto-serialization
+    which converts plain date strings like '2026-07-20' to '2026-07-20T00:00:00Z'."""
     date_label: str
     revenue: Decimal
     sales_count: int
 
 
-class WarehouseStatusRow(BaseModel):
+class WarehouseStatusRow(BaseSchema):
     warehouse_id: int
     warehouse_name: str
     quantity: int
     items: int
 
 
-class InventoryStatusItem(BaseModel):
+class InventoryStatusItem(BaseSchema):
     product_id: int
     product_name: str
     sku: Optional[str]
@@ -45,7 +53,7 @@ class InventoryStatusItem(BaseModel):
     is_out_of_stock: bool
 
 
-class InventoryStatusSummary(BaseModel):
+class InventoryStatusSummary(BaseSchema):
     total_quantity: int
     total_value: Decimal
     low_stock_count: int
@@ -54,7 +62,7 @@ class InventoryStatusSummary(BaseModel):
     low_stock_items: List[InventoryStatusItem]
 
 
-class TopProductRow(BaseModel):
+class TopProductRow(BaseSchema):
     product_id: int
     name: str
     sku: Optional[str]
@@ -62,7 +70,7 @@ class TopProductRow(BaseModel):
     revenue: Decimal
 
 
-class TopCustomerRow(BaseModel):
+class TopCustomerRow(BaseSchema):
     customer_id: int
     name: str
     orders: int
@@ -70,7 +78,7 @@ class TopCustomerRow(BaseModel):
     tier: Optional[str]
 
 
-class PaymentMethodRow(BaseModel):
+class PaymentMethodRow(BaseSchema):
     payment_method: str
     count: int
     total: Decimal

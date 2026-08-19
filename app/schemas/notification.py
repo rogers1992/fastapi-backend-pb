@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional, Any, Dict
 
 
-class NotificationBase(BaseModel):
+class NotificationBase(BaseSchema):
     type: str
     title: str
     message: str
@@ -24,9 +26,9 @@ class NotificationResponse(NotificationBase):
         from_attributes = True
 
 
-class UnreadCountResponse(BaseModel):
+class UnreadCountResponse(BaseSchema):
     unread_count: int
 
 
-class MessageResponse(BaseModel):
+class MessageResponse(BaseSchema):
     message: str

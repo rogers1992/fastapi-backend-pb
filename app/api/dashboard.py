@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..core.dependencies import require_permission
+from ..core.dependencies import get_user_timezone, require_permission
 from ..database import get_db
 from ..models.user import User
 from ..schemas.dashboard import (
@@ -36,8 +36,9 @@ router = APIRouter()
 async def get_dashboard_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
+    tz: str = Depends(get_user_timezone),
 ):
-    return dashboard_summary(db, current_user)
+    return dashboard_summary(db, current_user, tz=tz)
 
 
 @router.get("/sales-trend", response_model=List[SalesTrendPoint])
@@ -47,8 +48,9 @@ async def get_sales_trend(
     to_date: Optional[date] = Query(None, alias="to"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
+    tz: str = Depends(get_user_timezone),
 ):
-    return sales_trend(db, current_user, period=period, from_date=from_date, to_date=to_date)
+    return sales_trend(db, current_user, period=period, from_date=from_date, to_date=to_date, tz=tz)
 
 
 @router.get("/inventory-status", response_model=InventoryStatusSummary)

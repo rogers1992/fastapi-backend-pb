@@ -1,10 +1,12 @@
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
+
+from . import BaseSchema
 from datetime import datetime, date
 from typing import List, Optional
 from decimal import Decimal
 
 
-class OrderItemBase(BaseModel):
+class OrderItemBase(BaseSchema):
     product_id: int
     quantity: int
     unit_cost: Decimal
@@ -25,7 +27,7 @@ class OrderItemResponse(OrderItemBase):
         from_attributes = True
 
 
-class OrderBase(BaseModel):
+class OrderBase(BaseSchema):
     supplier_id: int
     warehouse_id: int
     expected_date: Optional[date] = None
@@ -45,7 +47,7 @@ class OrderCreate(OrderBase):
     items: List[OrderItemCreate]
 
 
-class OrderUpdate(BaseModel):
+class OrderUpdate(BaseSchema):
     notes: Optional[str] = None
 
 

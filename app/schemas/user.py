@@ -1,10 +1,12 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import EmailStr, Field
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional, List, Dict
 from .role import RoleResponse
 
 
-class UserBase(BaseModel):
+class UserBase(BaseSchema):
     username: str
     email: EmailStr
     first_name: str
@@ -18,7 +20,7 @@ class UserCreate(UserBase):
     warehouse_ids: Optional[List[int]] = None
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(BaseSchema):
     email: Optional[EmailStr] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -27,11 +29,11 @@ class UserUpdate(BaseModel):
     warehouse_ids: Optional[List[int]] = None
 
 
-class UserPasswordReset(BaseModel):
+class UserPasswordReset(BaseSchema):
     new_password: str = Field(min_length=6)
 
 
-class UserToggleActive(BaseModel):
+class UserToggleActive(BaseSchema):
     is_active: bool
 
 
@@ -59,18 +61,18 @@ class UserWithRoleResponse(UserBase):
         from_attributes = True
 
 
-class UserLogin(BaseModel):
+class UserLogin(BaseSchema):
     username: str
     password: str
 
 
-class Token(BaseModel):
+class Token(BaseSchema):
     access_token: str
     token_type: str
     user: UserWithRoleResponse
 
 
-class TokenData(BaseModel):
+class TokenData(BaseSchema):
     username: Optional[str] = None
     role: Optional[str] = None
     permissions: Optional[Dict[str, List[str]]] = None

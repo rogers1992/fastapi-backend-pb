@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional
 from decimal import Decimal
 
-class InventoryItemBase(BaseModel):
+class InventoryItemBase(BaseSchema):
     product_id: int
     warehouse_id: int
     quantity: int
@@ -14,7 +16,7 @@ class InventoryItemBase(BaseModel):
 class InventoryItemCreate(InventoryItemBase):
     pass
 
-class InventoryItemUpdate(BaseModel):
+class InventoryItemUpdate(BaseSchema):
     quantity: Optional[int] = None
     min_stock_level: Optional[int] = None
     max_stock_level: Optional[int] = None
@@ -28,7 +30,7 @@ class InventoryItemResponse(InventoryItemBase):
     class Config:
         from_attributes = True
 
-class InventoryTransfer(BaseModel):
+class InventoryTransfer(BaseSchema):
     product_id: int
     from_warehouse_id: int
     to_warehouse_id: int

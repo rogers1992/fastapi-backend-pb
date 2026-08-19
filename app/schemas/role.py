@@ -1,4 +1,6 @@
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional, List, Dict
 
@@ -7,7 +9,7 @@ VALID_RESOURCES = ["products", "inventory", "sales", "purchases", "customers", "
 VALID_ACTIONS = ["read", "create", "update", "delete"]
 
 
-class PermissionMap(BaseModel):
+class PermissionMap(BaseSchema):
     permissions: Dict[str, List[str]] = {}
 
     @field_validator("permissions")
@@ -22,7 +24,7 @@ class PermissionMap(BaseModel):
         return v
 
 
-class RoleBase(BaseModel):
+class RoleBase(BaseSchema):
     name: str
     description: Optional[str] = None
 
@@ -31,7 +33,7 @@ class RoleCreate(RoleBase, PermissionMap):
     pass
 
 
-class RoleUpdate(BaseModel):
+class RoleUpdate(BaseSchema):
     name: Optional[str] = None
     description: Optional[str] = None
     permissions: Optional[Dict[str, List[str]]] = None
@@ -50,7 +52,7 @@ class RoleUpdate(BaseModel):
         return v
 
 
-class RoleResponse(BaseModel):
+class RoleResponse(BaseSchema):
     id: int
     name: str
     description: Optional[str] = None

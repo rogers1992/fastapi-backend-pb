@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, Date, func
 from typing import List
+from zoneinfo import available_timezones
 from ..database import get_db
 from ..models.sale import Sale, SaleItem
 from ..models.product import Product
@@ -13,6 +15,16 @@ from ..config import settings
 from decimal import Decimal
 
 router = APIRouter()
+
+_DEFAULT_TZ = "America/La_Paz"
+_VALID_TIMEZONES = available_timezones()
+
+
+def _get_user_timezone(tz: str = Header(default=_DEFAULT_TZ, alias="X-Timezone")) -> str:
+    """Extract and validate the user's timezone from the request header."""
+    if tz in _VALID_TIMEZONES:
+        return tz
+    return _DEFAULT_TZ
 
 
 def _check_low_stock_after_sale(db: Session, inventory: InventoryItem) -> None:
@@ -52,18 +64,28 @@ def _check_low_stock_after_sale(db: Session, inventory: InventoryItem) -> None:
     )
 
 
+def _apply_vendedor_filter(query, current_user: User, tz: str):
+    """Apply vendedor restrictions: own sales only, today in user's timezone."""
+    today_in_tz = cast(func.timezone(tz, func.now()), Date)
+    sale_date_in_tz = cast(func.timezone(tz, func.timezone("UTC", Sale.sale_date)), Date)
+    return query.filter(
+        Sale.user_id == current_user.id,
+        sale_date_in_tz == today_in_tz,
+    )
+
+
 @router.get("/", response_model=List[SaleResponse])
 async def get_sales(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("sales", "read")),
+    tz: str = Depends(_get_user_timezone),
 ):
     query = db.query(Sale)
 
-    # Vendedor can only see their own sales
     if current_user.role and current_user.role.name == "vendedor":
-        query = query.filter(Sale.user_id == current_user.id)
+        query = _apply_vendedor_filter(query, current_user, tz)
 
     sales = query.order_by(Sale.sale_date.desc()).offset(skip).limit(limit).all()
     return sales
@@ -74,12 +96,12 @@ async def get_sale(
     sale_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("sales", "read")),
+    tz: str = Depends(_get_user_timezone),
 ):
     query = db.query(Sale).filter(Sale.id == sale_id)
 
-    # Vendedor can only view their own sales
     if current_user.role and current_user.role.name == "vendedor":
-        query = query.filter(Sale.user_id == current_user.id)
+        query = _apply_vendedor_filter(query, current_user, tz)
 
     sale = query.first()
     if not sale:

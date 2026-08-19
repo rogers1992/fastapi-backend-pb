@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as tz_module
 from decimal import Decimal
 from typing import Iterable, List, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
 
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
@@ -93,8 +94,15 @@ def _row_num_or_none(value) -> Optional[float]:
 # --------------------------------------------------------------------------- #
 # Dashboard: summary
 # --------------------------------------------------------------------------- #
-def dashboard_summary(db: Session, user: User) -> dict:
-    today = date.today()
+def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz") -> dict:
+    """Compute all KPI tiles for the dashboard.
+
+    Timezone-aware: "today", "this week", and "this month" are computed in
+    the user's local timezone so KPIs reflect the correct local day.
+    """
+    user_tz = ZoneInfo(tz)
+    now_local = datetime.now(tz_module.utc).astimezone(user_tz)
+    today = now_local.date()
     week_start = today - timedelta(days=today.weekday())  # Monday
     month_start = today.replace(day=1)
 
@@ -108,6 +116,14 @@ def dashboard_summary(db: Session, user: User) -> dict:
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt = week_start_dt + timedelta(days=7)
 
+    # Convert boundaries to UTC for DB queries
+    today_start_utc = today_start.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+    today_end_utc = today_end.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+    month_start_utc = month_start_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+    month_end_utc = month_end_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+    week_start_utc = week_start_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+    week_end_utc = week_end_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+
     base = db.query(Sale).filter(Sale.status == "completed")
 
     def _revenue(start, end) -> Tuple[Decimal, int]:
@@ -118,19 +134,48 @@ def dashboard_summary(db: Session, user: User) -> dict:
         ).first()
         return _safe_dec(row[0]), int(row[1] or 0)
 
-    rev_today, sales_today = _revenue(today_start, today_end)
-    rev_week, _ = _revenue(week_start_dt, week_end_dt)
-    rev_month, sales_month = _revenue(month_start_dt, month_end_dt)
+    rev_today, sales_today = _revenue(today_start_utc, today_end_utc)
+    rev_week, _ = _revenue(week_start_utc, week_end_utc)
+    rev_month, sales_month = _revenue(month_start_utc, month_end_utc)
 
     tax_month_row = (
         _apply_sales_visibility(base, user)
-        .filter(Sale.sale_date >= month_start_dt, Sale.sale_date < month_end_dt)
+        .filter(Sale.sale_date >= month_start_utc, Sale.sale_date < month_end_utc)
         .with_entities(func.coalesce(func.sum(Sale.tax_amount), 0))
         .first()
     )
     tax_month = _safe_dec(tax_month_row[0])
 
     avg_ticket = rev_month / sales_month if sales_month else Decimal("0")
+
+    # --- Gross profit (today & month) using historical COGS ---
+    latest_cost_subq = (
+        db.query(OrderItem.unit_cost)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(OrderItem.product_id == SaleItem.product_id)
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .filter(Order.received_date <= Sale.sale_date)
+        .order_by(Order.received_date.desc())
+        .limit(1)
+    ).scalar_subquery()
+
+    def _cogs(start, end) -> Decimal:
+        q = (
+            db.query(func.coalesce(func.sum(SaleItem.quantity * latest_cost_subq), 0))
+            .select_from(SaleItem)
+            .join(Sale, Sale.id == SaleItem.sale_id)
+            .filter(Sale.status == "completed")
+            .filter(Sale.sale_date >= start, Sale.sale_date < end)
+        )
+        q = _apply_sales_visibility(q, user)
+        return _safe_dec(q.scalar())
+
+    cogs_today = _cogs(today_start_utc, today_end_utc)
+    cogs_month = _cogs(month_start_utc, month_end_utc)
+    gross_profit_today = rev_today - cogs_today
+    gross_profit_month = rev_month - cogs_month
+    margin_pct_month = (gross_profit_month / rev_month * 100) if rev_month else Decimal("0")
 
     low_stock_count = (
         db.query(InventoryItem)
@@ -144,6 +189,7 @@ def dashboard_summary(db: Session, user: User) -> dict:
 
     # Top-selling product (last 30 days by revenue)
     since = datetime.combine(today - timedelta(days=30), datetime.min.time())
+    since_utc = since.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
     top_prod_row = (
         db.query(
             Product.name,
@@ -152,7 +198,7 @@ def dashboard_summary(db: Session, user: User) -> dict:
         .join(Product, Product.id == SaleItem.product_id)
         .join(Sale, Sale.id == SaleItem.sale_id)
         .filter(Sale.status == "completed")
-        .filter(Sale.sale_date >= since)
+        .filter(Sale.sale_date >= since_utc)
     )
     top_prod_row = _apply_sales_visibility(top_prod_row, user)
     top_prod_row = top_prod_row.group_by(Product.name).order_by(func.sum(SaleItem.total_price).desc()).first()
@@ -167,6 +213,10 @@ def dashboard_summary(db: Session, user: User) -> dict:
         "sales_count_month": sales_month,
         "avg_ticket": avg_ticket,
         "tax_collected_month": tax_month,
+        "gross_profit_today": gross_profit_today,
+        "gross_profit_month": gross_profit_month,
+        "cogs_month": cogs_month,
+        "margin_pct_month": margin_pct_month,
         "low_stock_count": low_stock_count,
         "pending_po_count": pending_po_count,
         "active_customers": active_customers,
@@ -185,24 +235,37 @@ def sales_trend(
     period: str = "daily",
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    tz: str = "America/La_Paz",
 ) -> List[dict]:
-    """Return a time series of revenue + sales count grouped by period."""
+    """Return a time series of revenue + sales count grouped by period.
+
+    Timezone-aware: day/week/month boundaries are computed in the user's
+    local timezone so charts reflect the correct local day.
+    """
     period = (period or "daily").lower()
     if period not in {"daily", "weekly", "monthly"}:
         period = "daily"
 
+    user_tz = ZoneInfo(tz)
+    now_local = datetime.now(tz_module.utc).astimezone(user_tz)
+
     from_dt, to_dt = _coerce_range(from_date, to_date)
     if from_dt is None:
-        from_dt = datetime.combine(date.today() - timedelta(days=29), datetime.min.time())
+        from_dt = datetime.combine(now_local.date() - timedelta(days=29), datetime.min.time())
     if to_dt is None:
-        to_dt = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+        to_dt = datetime.combine(now_local.date() + timedelta(days=1), datetime.min.time())
+
+    # Convert range boundaries to UTC for the DB query
+    from_utc = from_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
+    to_utc = to_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
 
     if period == "daily":
-        bucket = func.date_trunc("day", Sale.sale_date)
+        # Truncate in user's timezone, then convert result back for display
+        bucket = func.timezone("UTC", func.date_trunc("day", func.timezone(tz, Sale.sale_date)))
     elif period == "weekly":
-        bucket = func.date_trunc("week", Sale.sale_date)
+        bucket = func.timezone("UTC", func.date_trunc("week", func.timezone(tz, Sale.sale_date)))
     else:
-        bucket = func.date_trunc("month", Sale.sale_date)
+        bucket = func.timezone("UTC", func.date_trunc("month", func.timezone(tz, Sale.sale_date)))
 
     q = (
         db.query(
@@ -211,14 +274,14 @@ def sales_trend(
             func.count(Sale.id).label("sales_count"),
         )
         .filter(Sale.status == "completed")
-        .filter(Sale.sale_date >= from_dt, Sale.sale_date < to_dt)
+        .filter(Sale.sale_date >= from_utc, Sale.sale_date < to_utc)
     )
     q = _apply_sales_visibility(q, user)
     rows = q.group_by("bucket").order_by("bucket").all()
 
     return [
         {
-            "date_label": (r[0].date().isoformat() if hasattr(r[0], "date") else str(r[0])),
+            "date_label": r[0].strftime("%Y-%m-%d") if hasattr(r[0], "strftime") else str(r[0])[:10],
             "revenue": _safe_dec(r[1]),
             "sales_count": int(r[2] or 0),
         }
@@ -769,6 +832,75 @@ def profit_report(
     ]
 
 
+def profit_summary_report(
+    db: Session,
+    user: User,
+    period: str = "daily",
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+) -> List[dict]:
+    """Time-series gross profit summary grouped by day/week/month.
+
+    Uses the same historical COGS logic as profit_report(): the latest
+    received purchase order unit_cost at or before each sale date.
+    """
+    period = (period or "daily").lower()
+    if period not in {"daily", "weekly", "monthly"}:
+        period = "daily"
+
+    from_dt, to_dt = _coerce_range(from_date, to_date)
+    if from_dt is None:
+        from_dt = datetime.combine(date.today() - timedelta(days=29), datetime.min.time())
+    if to_dt is None:
+        to_dt = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+
+    if period == "daily":
+        bucket = func.date_trunc("day", Sale.sale_date)
+    elif period == "weekly":
+        bucket = func.date_trunc("week", Sale.sale_date)
+    else:
+        bucket = func.date_trunc("month", Sale.sale_date)
+
+    latest_cost_subq = (
+        db.query(OrderItem.unit_cost)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(OrderItem.product_id == SaleItem.product_id)
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .filter(Order.received_date <= Sale.sale_date)
+        .order_by(Order.received_date.desc())
+        .limit(1)
+    ).scalar_subquery()
+
+    q = (
+        db.query(
+            bucket.label("bucket"),
+            func.coalesce(func.sum(SaleItem.total_price), 0),
+            func.coalesce(func.sum(SaleItem.quantity * latest_cost_subq), 0),
+            func.count(Sale.id),
+        )
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .filter(Sale.status == "completed")
+        .filter(Sale.sale_date >= from_dt, Sale.sale_date < to_dt)
+    )
+    q = _apply_sales_visibility(q, user)
+    rows = q.group_by("bucket").order_by("bucket").all()
+
+    return [
+        {
+            "period_label": (r[0].date().isoformat() if hasattr(r[0], "date") else str(r[0])),
+            "revenue": _row_num(r[1]),
+            "cogs": _row_num(r[2]),
+            "gross_profit": _row_num((r[1] or 0) - (r[2] or 0)),
+            "margin_pct": _row_num(
+                (((r[1] or 0) - (r[2] or 0)) / r[1] * 100) if r[1] else 0.0
+            ),
+            "sales_count": int(r[3] or 0),
+        }
+        for r in rows
+    ]
+
+
 def abc_report(
     db: Session,
     user: User,
@@ -920,6 +1052,18 @@ def sellers_report(
     vendedor user only ever sees their own row (Q6 defensive filter).
     """
     from_dt, to_dt = _coerce_range(from_date, to_date)
+
+    # Pre-aggregate quantities per sale so the JOIN does not multiply
+    # Sale.total_amount / Sale.tax_amount across multiple items.
+    items_subq = (
+        db.query(
+            SaleItem.sale_id,
+            func.coalesce(func.sum(SaleItem.quantity), 0).label("total_qty"),
+        )
+        .group_by(SaleItem.sale_id)
+        .subquery()
+    )
+
     q = (
         db.query(
             User.id,
@@ -927,13 +1071,13 @@ def sellers_report(
             User.last_name,
             Role.name,
             func.count(Sale.id),
-            func.coalesce(func.sum(SaleItem.quantity), 0),
+            func.coalesce(func.sum(items_subq.c.total_qty), 0),
             func.coalesce(func.sum(Sale.total_amount), 0),
             func.coalesce(func.sum(Sale.tax_amount), 0),
         )
         .join(Sale, Sale.user_id == User.id)
         .outerjoin(Role, Role.id == User.role_id)
-        .outerjoin(SaleItem, SaleItem.sale_id == Sale.id)
+        .outerjoin(items_subq, items_subq.c.sale_id == Sale.id)
         .filter(Sale.status == "completed")
     )
     if from_dt is not None:
@@ -1020,6 +1164,10 @@ PRODUCTS_REPORT_HEADERS = [
 PROFIT_REPORT_HEADERS = [
     "product_id", "name", "sku", "units_sold", "revenue",
     "cogs", "gross_profit", "margin_pct",
+]
+PROFIT_SUMMARY_REPORT_HEADERS = [
+    "period_label", "revenue", "cogs", "gross_profit",
+    "margin_pct", "sales_count",
 ]
 ABC_REPORT_HEADERS = [
     "product_id", "name", "sku", "revenue", "revenue_pct",

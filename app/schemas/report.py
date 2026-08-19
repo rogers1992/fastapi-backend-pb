@@ -1,10 +1,12 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
 
-class SalesReportRow(BaseModel):
+class SalesReportRow(BaseSchema):
     sale_id: int
     sale_date: datetime
     customer_id: Optional[int]
@@ -20,7 +22,7 @@ class SalesReportRow(BaseModel):
     total_amount: Decimal
 
 
-class InventoryReportRow(BaseModel):
+class InventoryReportRow(BaseSchema):
     product_id: int
     name: str
     sku: Optional[str]
@@ -38,7 +40,7 @@ class InventoryReportRow(BaseModel):
     is_out_of_stock: bool
 
 
-class PurchaseReportRow(BaseModel):
+class PurchaseReportRow(BaseSchema):
     order_id: int
     order_date: datetime
     supplier_id: Optional[int]
@@ -51,7 +53,7 @@ class PurchaseReportRow(BaseModel):
     total_amount: Decimal
 
 
-class CustomerReportRow(BaseModel):
+class CustomerReportRow(BaseSchema):
     customer_id: int
     name: str
     email: Optional[str]
@@ -64,7 +66,7 @@ class CustomerReportRow(BaseModel):
     last_sale_date: Optional[datetime]
 
 
-class ProductReportRow(BaseModel):
+class ProductReportRow(BaseSchema):
     product_id: int
     name: str
     sku: Optional[str]
@@ -77,7 +79,7 @@ class ProductReportRow(BaseModel):
     stock_quantity: int
 
 
-class ProfitReportRow(BaseModel):
+class ProfitReportRow(BaseSchema):
     product_id: int
     name: str
     sku: Optional[str]
@@ -88,7 +90,7 @@ class ProfitReportRow(BaseModel):
     margin_pct: Decimal
 
 
-class ABCReportRow(BaseModel):
+class ABCReportRow(BaseSchema):
     product_id: int
     name: str
     sku: Optional[str]
@@ -99,7 +101,7 @@ class ABCReportRow(BaseModel):
     units_sold: int
 
 
-class SlowMovingReportRow(BaseModel):
+class SlowMovingReportRow(BaseSchema):
     product_id: int
     name: str
     sku: Optional[str]
@@ -111,7 +113,7 @@ class SlowMovingReportRow(BaseModel):
     stock_value: Decimal
 
 
-class SellerReportRow(BaseModel):
+class SellerReportRow(BaseSchema):
     seller_id: int
     seller_name: str
     role_name: Optional[str]
@@ -120,3 +122,12 @@ class SellerReportRow(BaseModel):
     revenue: Decimal
     avg_ticket: Decimal
     tax_collected: Decimal
+
+
+class ProfitSummaryRow(BaseSchema):
+    period_label: str
+    revenue: Decimal
+    cogs: Decimal
+    gross_profit: Decimal
+    margin_pct: Decimal
+    sales_count: int

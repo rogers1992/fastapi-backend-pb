@@ -17,6 +17,7 @@ from ..schemas.report import (
     CustomerReportRow,
     InventoryReportRow,
     ProductReportRow,
+    ProfitSummaryRow,
     PurchaseReportRow,
     SalesReportRow,
 )
@@ -25,6 +26,7 @@ from ..services.report_service import (
     CUSTOMERS_REPORT_HEADERS,
     INVENTORY_REPORT_HEADERS,
     PROFIT_REPORT_HEADERS,
+    PROFIT_SUMMARY_REPORT_HEADERS,
     PRODUCTS_REPORT_HEADERS,
     PURCHASES_REPORT_HEADERS,
     SALES_REPORT_HEADERS,
@@ -35,6 +37,7 @@ from ..services.report_service import (
     inventory_report,
     products_report,
     profit_report,
+    profit_summary_report,
     purchases_report,
     rows_to_csv_response,
     sales_report,
@@ -137,6 +140,21 @@ async def get_profit_report(
     return JSONResponse(content=rows)
 
 
+@router.get("/profit-summary")
+async def get_profit_summary_report(
+    period: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    from_date: Optional[date] = Query(None, alias="from"),
+    to_date: Optional[date] = Query(None, alias="to"),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("reports", "read")),
+):
+    rows = profit_summary_report(db, current_user, period=period, from_date=from_date, to_date=to_date)
+    if format == "csv":
+        return rows_to_csv_response(rows, PROFIT_SUMMARY_REPORT_HEADERS, "profit_summary_report.csv")
+    return JSONResponse(content=rows)
+
+
 @router.get("/abc")
 async def get_abc_report(
     from_date: Optional[date] = Query(None, alias="from"),
@@ -180,13 +198,14 @@ async def get_sellers_report(
 
 @router.get("/export")
 async def export_report(
-    report: str = Query(..., pattern="^(sales|inventory|purchases|customers|products|profit|abc|slow-moving|sellers)$"),
+    report: str = Query(..., pattern="^(sales|inventory|purchases|customers|products|profit|profit-summary|abc|slow-moving|sellers)$"),
     from_date: Optional[date] = Query(None, alias="from"),
     to_date: Optional[date] = Query(None, alias="to"),
     seller_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     threshold_days: Optional[int] = Query(None, ge=1, le=3650),
+    period: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
 ):
@@ -198,6 +217,7 @@ async def export_report(
         "customers": (customers_report, CUSTOMERS_REPORT_HEADERS, "customers_report.csv"),
         "products": (products_report, PRODUCTS_REPORT_HEADERS, "products_report.csv"),
         "profit": (profit_report, PROFIT_REPORT_HEADERS, "profit_report.csv"),
+        "profit-summary": (profit_summary_report, PROFIT_SUMMARY_REPORT_HEADERS, "profit_summary_report.csv"),
         "abc": (abc_report, ABC_REPORT_HEADERS, "abc_report.csv"),
         "slow-moving": (slow_moving_report, SLOW_MOVING_REPORT_HEADERS, "slow_moving_report.csv"),
         "sellers": (sellers_report, SELLERS_REPORT_HEADERS, "sellers_report.csv"),
@@ -211,6 +231,8 @@ async def export_report(
         rows = fn(db, current_user, from_date=from_date, to_date=to_date, seller_id=seller_id, customer_id=customer_id)
     elif report in ("products", "profit", "abc", "sellers"):
         rows = fn(db, current_user, from_date=from_date, to_date=to_date)
+    elif report == "profit-summary":
+        rows = fn(db, current_user, period=period or "daily", from_date=from_date, to_date=to_date)
     elif report == "slow-moving":
         rows = fn(db, threshold_days=threshold_days if threshold_days is not None else 90)
     elif report == "purchases":

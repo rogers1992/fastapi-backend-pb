@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 
-class SaleItemBase(BaseModel):
+class SaleItemBase(BaseSchema):
     product_id: int
     quantity: int
     unit_price: Decimal
@@ -21,7 +23,7 @@ class SaleItemResponse(SaleItemBase):
     class Config:
         from_attributes = True
 
-class SaleBase(BaseModel):
+class SaleBase(BaseSchema):
     customer_id: int
     payment_method: str
     notes: Optional[str] = None
