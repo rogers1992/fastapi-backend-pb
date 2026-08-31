@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy import cast, Date, func
 from typing import List
 from zoneinfo import available_timezones
@@ -87,7 +87,13 @@ async def get_sales(
     if current_user.role and current_user.role.name == "vendedor":
         query = _apply_vendedor_filter(query, current_user, tz)
 
-    sales = query.order_by(Sale.sale_date.desc()).offset(skip).limit(limit).all()
+    sales = (
+        query.options(
+            selectinload(Sale.sale_items).joinedload(SaleItem.product)
+        )
+        .order_by(Sale.sale_date.desc())
+        .offset(skip).limit(limit).all()
+    )
     return sales
 
 
@@ -103,7 +109,9 @@ async def get_sale(
     if current_user.role and current_user.role.name == "vendedor":
         query = _apply_vendedor_filter(query, current_user, tz)
 
-    sale = query.first()
+    sale = query.options(
+        selectinload(Sale.sale_items).joinedload(SaleItem.product)
+    ).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     return sale
@@ -118,9 +126,12 @@ async def create_sale(
     total_amount = Decimal(0)
     tax_rate = Decimal(str(settings.TAX_RATE))
 
+    warehouse_id = sale.warehouse_id
+
     db_sale = Sale(
         customer_id=sale.customer_id,
         user_id=current_user.id,
+        warehouse_id=warehouse_id,
         payment_method=sale.payment_method,
         notes=sale.notes,
         total_amount=0,
@@ -133,16 +144,51 @@ async def create_sale(
     items_count = 0
 
     for item_data in sale.items:
-        inventory = db.query(InventoryItem).filter(
-            InventoryItem.product_id == item_data.product_id,
-        ).first()
+        product = db.query(Product).filter(Product.id == item_data.product_id).first()
+        product_name = product.name if product else f"Producto #{item_data.product_id}"
 
-        if not inventory or inventory.quantity < item_data.quantity:
-            db.rollback()
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient inventory for product {item_data.product_id}",
+        if warehouse_id:
+            warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+            warehouse_name = warehouse.name if warehouse else "General"
+            inventory = db.query(InventoryItem).filter(
+                InventoryItem.product_id == item_data.product_id,
+                InventoryItem.warehouse_id == warehouse_id,
+            ).first()
+
+            if not inventory or inventory.quantity < item_data.quantity:
+                available = inventory.quantity if inventory else 0
+                db.rollback()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Stock insuficiente para {product_name} en {warehouse_name} (disponible: {available}, solicitado: {item_data.quantity})",
+                )
+        else:
+            inventories = (
+                db.query(InventoryItem)
+                .filter(
+                    InventoryItem.product_id == item_data.product_id,
+                    InventoryItem.quantity > 0,
+                )
+                .order_by(InventoryItem.quantity.desc())
+                .all()
             )
+            total_available = sum(inv.quantity for inv in inventories)
+            if total_available < item_data.quantity:
+                db.rollback()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Stock insuficiente para {product_name} (disponible: {total_available}, solicitado: {item_data.quantity})",
+                )
+
+            remaining = item_data.quantity
+            for inv in inventories:
+                deduct = min(inv.quantity, remaining)
+                inv.quantity -= deduct
+                remaining -= deduct
+                if inv not in affected_inventory:
+                    affected_inventory.append(inv)
+                if remaining == 0:
+                    break
 
         item_total = (item_data.unit_price * item_data.quantity) - item_data.discount
         total_amount += item_total
@@ -158,8 +204,10 @@ async def create_sale(
         )
         db.add(sale_item)
 
-        inventory.quantity -= item_data.quantity
-        affected_inventory.append(inventory)
+        if warehouse_id:
+            inventory.quantity -= item_data.quantity
+            if inventory not in affected_inventory:
+                affected_inventory.append(inventory)
 
     tax_amount = total_amount * tax_rate
     db_sale.total_amount = total_amount + tax_amount

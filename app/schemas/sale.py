@@ -25,6 +25,7 @@ class SaleItemResponse(SaleItemBase):
 
 class SaleBase(BaseSchema):
     customer_id: int
+    warehouse_id: Optional[int] = None
     payment_method: str
     notes: Optional[str] = None
 
@@ -38,11 +39,12 @@ class SaleUpdate(BaseModel):
 class SaleResponse(SaleBase):
     id: int
     user_id: int
+    warehouse_name: Optional[str] = None
     total_amount: Decimal
     tax_amount: Decimal
     status: str
     sale_date: datetime
     items: List[SaleItemResponse] = []
-    
+
     class Config:
         from_attributes = True

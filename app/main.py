@@ -3,9 +3,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from sqlalchemy import text
+import traceback
 from .config import settings
 from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard
 from .database import engine, Base
+
+
+def _ensure_column(table: str, column: str, sql_type: str, conn) -> None:
+    """
+    Add a column to an existing table if it does not already exist.
+    Uses information_schema so it works regardless of the DB search_path
+    (important for Neon and other hosted PostgreSQL services).
+    """
+    result = conn.execute(
+        text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_name = :table AND column_name = :column"
+        ),
+        {"table": table, "column": column},
+    )
+    if result.scalar() > 0:
+        return  # already present
+    conn.execute(
+        text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {sql_type}")
+    )
+    conn.commit()
 
 
 def _ensure_products_image_url_column() -> None:
@@ -23,19 +45,11 @@ def _ensure_products_image_url_column() -> None:
     nonexistent table -- create_all will build it WITH the column.
     Safe to run on every boot: IF NOT EXISTS makes it a no-op when present.
     """
-    with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT to_regclass('public.products')")
-        ).scalar()
-        if exists is None:
-            return  # table doesn't exist yet; create_all will build it with image_url
-        conn.execute(
-            text(
-                "ALTER TABLE products "
-                "ADD COLUMN IF NOT EXISTS image_url VARCHAR(255)"
-            )
-        )
-        conn.commit()
+    try:
+        with engine.connect() as conn:
+            _ensure_column("products", "image_url", "VARCHAR(255)", conn)
+    except Exception:
+        traceback.print_exc()
 
 
 def _ensure_customer_is_active_column() -> None:
@@ -43,19 +57,11 @@ def _ensure_customer_is_active_column() -> None:
     Backfill the customers.is_active column on DBs that predate it.
     Same pattern as _ensure_products_image_url_column().
     """
-    with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT to_regclass('public.customers')")
-        ).scalar()
-        if exists is None:
-            return
-        conn.execute(
-            text(
-                "ALTER TABLE customers "
-                "ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1 NOT NULL"
-            )
-        )
-        conn.commit()
+    try:
+        with engine.connect() as conn:
+            _ensure_column("customers", "is_active", "INTEGER DEFAULT 1 NOT NULL", conn)
+    except Exception:
+        traceback.print_exc()
 
 
 def _ensure_orders_total_amount_column() -> None:
@@ -63,24 +69,28 @@ def _ensure_orders_total_amount_column() -> None:
     Backfill the orders.total_amount column on DBs that predate it.
     Matches the pattern used for the image_url and is_active backfills.
     """
-    with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT to_regclass('public.orders')")
-        ).scalar()
-        if exists is None:
-            return  # create_all will build the table with the column present
-        conn.execute(
-            text(
-                "ALTER TABLE orders "
-                "ADD COLUMN IF NOT EXISTS total_amount DECIMAL(10,2) DEFAULT 0"
-            )
-        )
-        conn.commit()
+    try:
+        with engine.connect() as conn:
+            _ensure_column("orders", "total_amount", "DECIMAL(10,2) DEFAULT 0", conn)
+    except Exception:
+        traceback.print_exc()
+
+
+def _ensure_sales_warehouse_id_column() -> None:
+    """
+    Backfill the sales.warehouse_id column on DBs that predate it.
+    """
+    try:
+        with engine.connect() as conn:
+            _ensure_column("sales", "warehouse_id", "INTEGER REFERENCES warehouses(id)", conn)
+    except Exception:
+        traceback.print_exc()
 
 
 _ensure_products_image_url_column()
 _ensure_customer_is_active_column()
 _ensure_orders_total_amount_column()
+_ensure_sales_warehouse_id_column()
 Base.metadata.create_all(bind=engine)
 
 # Ensure the upload directory exists before mounting StaticFiles.

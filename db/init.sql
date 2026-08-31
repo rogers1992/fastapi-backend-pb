@@ -80,6 +80,10 @@ CREATE TABLE products (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX idx_products_is_active ON products(is_active);
+CREATE INDEX idx_products_category_id ON products(category_id);
+CREATE INDEX idx_products_supplier_id ON products(supplier_id);
+
 -- 7. Inventory Items Table
 CREATE TABLE inventory_items (
     id SERIAL PRIMARY KEY,
@@ -94,6 +98,9 @@ CREATE TABLE inventory_items (
     UNIQUE(product_id, warehouse_id)
 );
 
+CREATE INDEX idx_inventory_product_id ON inventory_items(product_id);
+CREATE INDEX idx_inventory_warehouse_id ON inventory_items(warehouse_id);
+
 -- 8. Customers Table
 CREATE TABLE customers (
     id SERIAL PRIMARY KEY,
@@ -106,6 +113,8 @@ CREATE TABLE customers (
     is_active INTEGER DEFAULT 1 NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_customers_is_active ON customers(is_active);
 
 -- 9. Loyalty Table
 CREATE TABLE loyalty (
@@ -122,6 +131,7 @@ CREATE TABLE sales (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES customers(id),
     user_id INTEGER REFERENCES users(id),
+    warehouse_id INTEGER REFERENCES warehouses(id),
     payment_method VARCHAR(50) NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
     tax_amount DECIMAL(10,2) DEFAULT 0,
@@ -129,6 +139,12 @@ CREATE TABLE sales (
     sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT
 );
+
+CREATE INDEX idx_sales_status ON sales(status);
+CREATE INDEX idx_sales_customer_id ON sales(customer_id);
+CREATE INDEX idx_sales_user_id ON sales(user_id);
+CREATE INDEX idx_sales_sale_date ON sales(sale_date DESC);
+CREATE INDEX idx_sales_warehouse_id ON sales(warehouse_id);
 
 -- 11. Sale Items Table
 CREATE TABLE sale_items (
@@ -141,6 +157,9 @@ CREATE TABLE sale_items (
     total_price DECIMAL(10,2) NOT NULL,
     notes TEXT
 );
+
+CREATE INDEX idx_sale_items_sale_id ON sale_items(sale_id);
+CREATE INDEX idx_sale_items_product_id ON sale_items(product_id);
 
 -- 12. Orders Table (Purchase Orders)
 CREATE TABLE orders (
@@ -156,6 +175,11 @@ CREATE TABLE orders (
     notes TEXT
 );
 
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_supplier_id ON orders(supplier_id);
+CREATE INDEX idx_orders_warehouse_id ON orders(warehouse_id);
+CREATE INDEX idx_orders_order_date ON orders(order_date DESC);
+
 -- 13. Order Items Table
 CREATE TABLE order_items (
     id SERIAL PRIMARY KEY,
@@ -167,6 +191,9 @@ CREATE TABLE order_items (
     received_quantity INTEGER DEFAULT 0,
     notes TEXT
 );
+
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 
 -- 14. Payments Table
 CREATE TABLE payments (

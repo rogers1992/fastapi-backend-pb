@@ -9,6 +9,7 @@ class Sale(Base):
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     payment_method = Column(String(50), nullable=False)
     total_amount = Column(Numeric(10, 2), nullable=False)
     tax_amount = Column(Numeric(10, 2), default=0)
@@ -19,11 +20,16 @@ class Sale(Base):
     # Relationships
     customer = relationship("Customer", back_populates="sales")
     user = relationship("User", back_populates="sales")
+    warehouse = relationship("Warehouse", back_populates="sales")
     sale_items = relationship("SaleItem", back_populates="sale")
 
     @property
     def items(self):
         return self.sale_items
+
+    @property
+    def warehouse_name(self):
+        return self.warehouse.name if self.warehouse else None
 
 class SaleItem(Base):
     __tablename__ = "sale_items"

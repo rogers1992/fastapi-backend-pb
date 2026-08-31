@@ -39,4 +39,5 @@ class Warehouse(Base):
     # Relationships
     inventory_items = relationship("InventoryItem", back_populates="warehouse")
     orders = relationship("Order", back_populates="warehouse")
+    sales = relationship("Sale", back_populates="warehouse")
     users = relationship("User", secondary=user_warehouses, back_populates="warehouses")

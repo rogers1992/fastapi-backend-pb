@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, joinedload
 from typing import List, Optional
 from decimal import Decimal
 from datetime import date
@@ -35,7 +35,13 @@ async def get_purchases(
     if warehouse_id:
         query = query.filter(Order.warehouse_id == warehouse_id)
 
-    orders = query.order_by(Order.order_date.desc()).offset(skip).limit(limit).all()
+    orders = (
+        query.options(
+            selectinload(Order.order_items).joinedload(OrderItem.product)
+        )
+        .order_by(Order.order_date.desc())
+        .offset(skip).limit(limit).all()
+    )
     return orders
 
 
@@ -45,7 +51,9 @@ async def get_purchase(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("purchases", "read")),
 ):
-    order = db.query(Order).filter(Order.id == order_id).first()
+    order = db.query(Order).options(
+        selectinload(Order.order_items).joinedload(OrderItem.product)
+    ).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     return order

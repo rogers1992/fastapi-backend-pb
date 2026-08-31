@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 from typing import List, Optional
 from ..database import get_db
@@ -46,7 +46,7 @@ async def get_customers(
         query = query.filter(Customer.email.ilike(f"%{email}%"))
 
     total = query.with_entities(func.count(Customer.id)).scalar()
-    customers = query.offset(skip).limit(limit).all()
+    customers = query.options(joinedload(Customer.loyalty)).offset(skip).limit(limit).all()
 
     return {
         "items": customers,
