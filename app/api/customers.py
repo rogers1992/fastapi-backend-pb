@@ -15,7 +15,7 @@ from ..models.user import User
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 async def get_customers(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=1000),
@@ -69,7 +69,7 @@ async def get_customer(
     return customer
 
 
-@router.post("/", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
 async def create_customer(
     customer: CustomerCreate,
     db: Session = Depends(get_db),

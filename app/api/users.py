@@ -13,7 +13,7 @@ from ..services.user_service import UserService
 router = APIRouter()
 
 
-@router.get("/", response_model=List[UserWithRoleResponse])
+@router.get("", response_model=List[UserWithRoleResponse])
 async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -38,7 +38,7 @@ async def get_user(
     return user
 
 
-@router.post("/", response_model=UserWithRoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserWithRoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),

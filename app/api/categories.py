@@ -10,7 +10,7 @@ from ..models.user import User
 router = APIRouter()
 
 
-@router.get("/", response_model=List[CategoryResponse])
+@router.get("", response_model=List[CategoryResponse])
 async def get_categories(
     skip: int = 0,
     limit: int = 100,
@@ -33,7 +33,7 @@ async def get_category(
     return category
 
 
-@router.post("/", response_model=CategoryResponse)
+@router.post("", response_model=CategoryResponse)
 async def create_category(
     category: CategoryCreate,
     db: Session = Depends(get_db),

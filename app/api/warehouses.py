@@ -10,7 +10,7 @@ from ..models.user import User
 router = APIRouter()
 
 
-@router.get("/", response_model=List[WarehouseResponse])
+@router.get("", response_model=List[WarehouseResponse])
 async def get_warehouses(
     skip: int = 0,
     limit: int = 100,
@@ -38,7 +38,7 @@ async def get_warehouse(
     return warehouse
 
 
-@router.post("/", response_model=WarehouseResponse)
+@router.post("", response_model=WarehouseResponse)
 async def create_warehouse(
     warehouse: WarehouseCreate,
     db: Session = Depends(get_db),

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List, Any, Dict
 from ..models.notification import Notification
 from ..models.user import User
+from ..models.user import Role
 from ..schemas.notification import NotificationCreate
 
 
@@ -25,8 +26,6 @@ class NotificationService:
             is_read=False,
         )
         db.add(notification)
-        db.commit()
-        db.refresh(notification)
         return notification
 
     @staticmethod
@@ -119,28 +118,21 @@ class NotificationService:
         """
         Create a notification for every active user whose role grants
         `resource.action`. Returns the number of notifications created.
-
-        Used by trigger points (low stock, new sale) to alert the right
-        staff without hardcoding role names.
         """
-        users = db.query(User).filter(User.is_active == True).all()  # noqa: E712
+        users = (
+            db.query(User)
+            .join(User.role)
+            .filter(
+                User.is_active == True,
+                Role.permissions.contains({resource: [action]}),
+            )
+            .all()
+        )
         count = 0
         for user in users:
-            perms = (user.role.permissions if user.role else {}) or {}
-            allowed = perms.get(resource, [])
-            if action in allowed:
-                notification = Notification(
-                    user_id=user.id,
-                    type=type,
-                    title=title,
-                    message=message,
-                    data=data,
-                    is_read=False,
-                )
-                db.add(notification)
-                count += 1
-        if count > 0:
-            db.commit()
+            NotificationService.create(db, user.id, type, title, message, data)
+            count += 1
+        db.commit()
         return count
 
     @staticmethod

@@ -14,7 +14,7 @@ from ..schemas.notification import (
 router = APIRouter()
 
 
-@router.get("/", response_model=List[NotificationResponse])
+@router.get("", response_model=List[NotificationResponse])
 async def list_notifications(
     unread_only: bool = Query(False),
     skip: int = Query(0, ge=0),

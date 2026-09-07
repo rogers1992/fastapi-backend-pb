@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session, selectinload, joinedload
-from sqlalchemy import cast, Date, func
+from sqlalchemy import func
+from datetime import datetime, timedelta, timezone as tz_module
+from zoneinfo import ZoneInfo, available_timezones
 from typing import List
-from zoneinfo import available_timezones
 from ..database import get_db
 from ..models.sale import Sale, SaleItem
 from ..models.product import Product
@@ -27,7 +28,12 @@ def _get_user_timezone(tz: str = Header(default=_DEFAULT_TZ, alias="X-Timezone")
     return _DEFAULT_TZ
 
 
-def _check_low_stock_after_sale(db: Session, inventory: InventoryItem) -> None:
+def _check_low_stock_after_sale(
+    db: Session,
+    inventory: InventoryItem,
+    product_name: str | None = None,
+    warehouse_name: str | None = None,
+) -> None:
     """
     After a sale reduces inventory, alert staff if the item is now at or
     below its minimum stock level.
@@ -37,11 +43,13 @@ def _check_low_stock_after_sale(db: Session, inventory: InventoryItem) -> None:
     if inventory.quantity > inventory.min_stock_level:
         return
 
-    product = db.query(Product).filter(Product.id == inventory.product_id).first()
-    product_name = product.name if product else f"Producto #{inventory.product_id}"
+    if product_name is None:
+        product = db.query(Product).filter(Product.id == inventory.product_id).first()
+        product_name = product.name if product else f"Producto #{inventory.product_id}"
 
-    warehouse = db.query(Warehouse).filter(Warehouse.id == inventory.warehouse_id).first()
-    warehouse_name = warehouse.name if warehouse else f"Almacen #{inventory.warehouse_id}"
+    if warehouse_name is None:
+        warehouse = db.query(Warehouse).filter(Warehouse.id == inventory.warehouse_id).first()
+        warehouse_name = warehouse.name if warehouse else f"Almacen #{inventory.warehouse_id}"
 
     NotificationService.notify_users_with_permission(
         db,
@@ -66,15 +74,23 @@ def _check_low_stock_after_sale(db: Session, inventory: InventoryItem) -> None:
 
 def _apply_vendedor_filter(query, current_user: User, tz: str):
     """Apply vendedor restrictions: own sales only, today in user's timezone."""
-    today_in_tz = cast(func.timezone(tz, func.now()), Date)
-    sale_date_in_tz = cast(func.timezone(tz, func.timezone("UTC", Sale.sale_date)), Date)
+    user_tz = ZoneInfo(tz)
+    today_local = datetime.now(tz_module.utc).astimezone(user_tz).date()
+    today_start_utc = (
+        datetime.combine(today_local, datetime.min.time())
+        .replace(tzinfo=user_tz)
+        .astimezone(tz_module.utc)
+        .replace(tzinfo=None)
+    )
+    today_end_utc = today_start_utc + timedelta(days=1)
     return query.filter(
         Sale.user_id == current_user.id,
-        sale_date_in_tz == today_in_tz,
+        Sale.sale_date >= today_start_utc,
+        Sale.sale_date < today_end_utc,
     )
 
 
-@router.get("/", response_model=List[SaleResponse])
+@router.get("", response_model=List[SaleResponse])
 async def get_sales(
     skip: int = 0,
     limit: int = 100,
@@ -117,7 +133,7 @@ async def get_sale(
     return sale
 
 
-@router.post("/", response_model=SaleResponse)
+@router.post("", response_model=SaleResponse)
 async def create_sale(
     sale: SaleCreate,
     db: Session = Depends(get_db),
@@ -140,20 +156,34 @@ async def create_sale(
     db.add(db_sale)
     db.flush()
 
+    # Pre-fetch warehouse ONCE (same for all items)
+    warehouse_name = "General"
+    if warehouse_id:
+        warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+        warehouse_name = warehouse.name if warehouse else "General"
+
+    # Pre-fetch all products in ONE query
+    product_ids = [item.product_id for item in sale.items]
+    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()}
+
+    # Pre-fetch all inventory items for this warehouse in ONE query
+    inv_map: dict[tuple[int, int], InventoryItem] = {}
+    if warehouse_id:
+        inv_rows = db.query(InventoryItem).filter(
+            InventoryItem.product_id.in_(product_ids),
+            InventoryItem.warehouse_id == warehouse_id,
+        ).all()
+        inv_map = {(i.product_id, i.warehouse_id): i for i in inv_rows}
+
     affected_inventory: List[InventoryItem] = []
     items_count = 0
 
     for item_data in sale.items:
-        product = db.query(Product).filter(Product.id == item_data.product_id).first()
+        product = products.get(item_data.product_id)
         product_name = product.name if product else f"Producto #{item_data.product_id}"
 
         if warehouse_id:
-            warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
-            warehouse_name = warehouse.name if warehouse else "General"
-            inventory = db.query(InventoryItem).filter(
-                InventoryItem.product_id == item_data.product_id,
-                InventoryItem.warehouse_id == warehouse_id,
-            ).first()
+            inventory = inv_map.get((item_data.product_id, warehouse_id))
 
             if not inventory or inventory.quantity < item_data.quantity:
                 available = inventory.quantity if inventory else 0
@@ -238,6 +268,6 @@ async def create_sale(
     # 2) Low-stock alerts for any inventory that dropped to/below min.
     for inv in affected_inventory:
         db.refresh(inv)
-        _check_low_stock_after_sale(db, inv)
+        _check_low_stock_after_sale(db, inv, product_name, warehouse_name)
 
     return db_sale

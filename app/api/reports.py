@@ -60,6 +60,7 @@ async def get_sales_report(
     to_date: Optional[date] = Query(None, alias="to"),
     seller_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
+    warehouse_id: Optional[list[int]] = Query(None),
     format: str = Query("json", pattern="^(json|csv)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
@@ -68,6 +69,7 @@ async def get_sales_report(
         db, current_user,
         from_date=from_date, to_date=to_date,
         seller_id=seller_id, customer_id=customer_id,
+        warehouse_id=warehouse_id,
     )
     return _maybe_csv(rows, SALES_REPORT_HEADERS, "sales_report.csv", format) \
         if format == "csv" else JSONResponse(content=rows)
@@ -130,11 +132,12 @@ async def get_products_report(
 async def get_profit_report(
     from_date: Optional[date] = Query(None, alias="from"),
     to_date: Optional[date] = Query(None, alias="to"),
+    warehouse_id: Optional[list[int]] = Query(None),
     format: str = Query("json", pattern="^(json|csv)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
 ):
-    rows = profit_report(db, current_user, from_date=from_date, to_date=to_date)
+    rows = profit_report(db, current_user, from_date=from_date, to_date=to_date, warehouse_id=warehouse_id)
     if format == "csv":
         return rows_to_csv_response(rows, PROFIT_REPORT_HEADERS, "profit_report.csv")
     return JSONResponse(content=rows)
@@ -145,11 +148,12 @@ async def get_profit_summary_report(
     period: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
     from_date: Optional[date] = Query(None, alias="from"),
     to_date: Optional[date] = Query(None, alias="to"),
+    warehouse_id: Optional[list[int]] = Query(None),
     format: str = Query("json", pattern="^(json|csv)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
 ):
-    rows = profit_summary_report(db, current_user, period=period, from_date=from_date, to_date=to_date)
+    rows = profit_summary_report(db, current_user, period=period, from_date=from_date, to_date=to_date, warehouse_id=warehouse_id)
     if format == "csv":
         return rows_to_csv_response(rows, PROFIT_SUMMARY_REPORT_HEADERS, "profit_summary_report.csv")
     return JSONResponse(content=rows)
@@ -206,6 +210,7 @@ async def export_report(
     status: Optional[str] = Query(None),
     threshold_days: Optional[int] = Query(None, ge=1, le=3650),
     period: Optional[str] = Query(None),
+    warehouse_id: Optional[list[int]] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("reports", "read")),
 ):
@@ -228,11 +233,13 @@ async def export_report(
     fn, headers, filename = table[report]
 
     if report == "sales":
-        rows = fn(db, current_user, from_date=from_date, to_date=to_date, seller_id=seller_id, customer_id=customer_id)
-    elif report in ("products", "profit", "abc", "sellers"):
+        rows = fn(db, current_user, from_date=from_date, to_date=to_date, seller_id=seller_id, customer_id=customer_id, warehouse_id=warehouse_id)
+    elif report in ("products", "abc", "sellers"):
         rows = fn(db, current_user, from_date=from_date, to_date=to_date)
+    elif report == "profit":
+        rows = fn(db, current_user, from_date=from_date, to_date=to_date, warehouse_id=warehouse_id)
     elif report == "profit-summary":
-        rows = fn(db, current_user, period=period or "daily", from_date=from_date, to_date=to_date)
+        rows = fn(db, current_user, period=period or "daily", from_date=from_date, to_date=to_date, warehouse_id=warehouse_id)
     elif report == "slow-moving":
         rows = fn(db, threshold_days=threshold_days if threshold_days is not None else 90)
     elif report == "purchases":

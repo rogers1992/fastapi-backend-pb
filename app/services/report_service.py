@@ -19,7 +19,7 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from ..models.customer import Customer, Loyalty
@@ -94,11 +94,13 @@ def _row_num_or_none(value) -> Optional[float]:
 # --------------------------------------------------------------------------- #
 # Dashboard: summary
 # --------------------------------------------------------------------------- #
-def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz") -> dict:
+def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz", warehouse_id: Optional[list[int]] = None) -> dict:
     """Compute all KPI tiles for the dashboard.
 
     Timezone-aware: "today", "this week", and "this month" are computed in
     the user's local timezone so KPIs reflect the correct local day.
+
+    Optimized: consolidates 11 sequential queries into 3 round-trips.
     """
     user_tz = ZoneInfo(tz)
     now_local = datetime.now(tz_module.utc).astimezone(user_tz)
@@ -125,69 +127,88 @@ def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz") -> di
     week_end_utc = week_end_dt.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
 
     base = db.query(Sale).filter(Sale.status == "completed")
+    if warehouse_id:
+        base = base.filter(Sale.warehouse_id.in_(warehouse_id))
+    base = _apply_sales_visibility(base, user)
 
-    def _revenue(start, end) -> Tuple[Decimal, int]:
-        q = _apply_sales_visibility(base, user).filter(Sale.sale_date >= start, Sale.sale_date < end)
-        row = q.with_entities(
-            func.coalesce(func.sum(Sale.total_amount), 0),
-            func.count(Sale.id),
-        ).first()
-        return _safe_dec(row[0]), int(row[1] or 0)
+    # --- Query 1: Revenue metrics (today/week/month) + tax in ONE round-trip ---
+    revenue_row = base.with_entities(
+        func.coalesce(func.sum(case((Sale.sale_date >= today_start_utc, Sale.total_amount))), 0),
+        func.count(case((Sale.sale_date >= today_start_utc, Sale.id))),
+        func.coalesce(func.sum(case((Sale.sale_date >= week_start_utc, Sale.total_amount))), 0),
+        func.coalesce(func.sum(case((Sale.sale_date >= month_start_utc, Sale.total_amount))), 0),
+        func.count(case((Sale.sale_date >= month_start_utc, Sale.id))),
+        func.coalesce(func.sum(case((Sale.sale_date >= month_start_utc, Sale.tax_amount))), 0),
+    ).filter(
+        Sale.sale_date >= week_start_utc,  # Earliest boundary
+        Sale.sale_date < today_end_utc,
+    ).first()
 
-    rev_today, sales_today = _revenue(today_start_utc, today_end_utc)
-    rev_week, _ = _revenue(week_start_utc, week_end_utc)
-    rev_month, sales_month = _revenue(month_start_utc, month_end_utc)
-
-    tax_month_row = (
-        _apply_sales_visibility(base, user)
-        .filter(Sale.sale_date >= month_start_utc, Sale.sale_date < month_end_utc)
-        .with_entities(func.coalesce(func.sum(Sale.tax_amount), 0))
-        .first()
-    )
-    tax_month = _safe_dec(tax_month_row[0])
+    rev_today = _safe_dec(revenue_row[0])
+    sales_today = int(revenue_row[1] or 0)
+    rev_week = _safe_dec(revenue_row[2])
+    rev_month = _safe_dec(revenue_row[3])
+    sales_month = int(revenue_row[4] or 0)
+    tax_month = _safe_dec(revenue_row[5])
 
     avg_ticket = rev_month / sales_month if sales_month else Decimal("0")
 
-    # --- Gross profit (today & month) using historical COGS ---
-    latest_cost_subq = (
-        db.query(OrderItem.unit_cost)
+    # --- Query 2: COGS (today & month) using window function instead of correlated subquery ---
+    latest_cost_cte = (
+        db.query(
+            OrderItem.product_id,
+            OrderItem.unit_cost,
+            func.row_number().over(
+                partition_by=OrderItem.product_id,
+                order_by=Order.received_date.desc(),
+            ).label("rn"),
+        )
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(OrderItem.product_id == SaleItem.product_id)
         .filter(Order.status == "received")
         .filter(Order.received_date.isnot(None))
-        .filter(Order.received_date <= Sale.sale_date)
-        .order_by(Order.received_date.desc())
-        .limit(1)
-    ).scalar_subquery()
+        .subquery()
+    )
 
-    def _cogs(start, end) -> Decimal:
-        q = (
-            db.query(func.coalesce(func.sum(SaleItem.quantity * latest_cost_subq), 0))
-            .select_from(SaleItem)
-            .join(Sale, Sale.id == SaleItem.sale_id)
-            .filter(Sale.status == "completed")
-            .filter(Sale.sale_date >= start, Sale.sale_date < end)
-        )
-        q = _apply_sales_visibility(q, user)
-        return _safe_dec(q.scalar())
+    cogs_base = (
+        db.query(SaleItem)
+        .select_from(SaleItem)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .outerjoin(latest_cost_cte, latest_cost_cte.c.product_id == SaleItem.product_id)
+        .filter(latest_cost_cte.c.rn == 1)
+        .filter(Sale.status == "completed")
+        .filter(Sale.sale_date >= week_start_utc, Sale.sale_date < today_end_utc)
+    )
+    if warehouse_id:
+        cogs_base = cogs_base.filter(Sale.warehouse_id.in_(warehouse_id))
+    cogs_base = _apply_sales_visibility(cogs_base, user)
 
-    cogs_today = _cogs(today_start_utc, today_end_utc)
-    cogs_month = _cogs(month_start_utc, month_end_utc)
+    cogs_row = cogs_base.with_entities(
+        func.coalesce(func.sum(case((Sale.sale_date >= today_start_utc, SaleItem.quantity * latest_cost_cte.c.unit_cost))), 0),
+        func.coalesce(func.sum(case((Sale.sale_date >= month_start_utc, SaleItem.quantity * latest_cost_cte.c.unit_cost))), 0),
+    ).first()
+
+    cogs_today = _safe_dec(cogs_row[0])
+    cogs_month = _safe_dec(cogs_row[1])
     gross_profit_today = rev_today - cogs_today
     gross_profit_month = rev_month - cogs_month
     margin_pct_month = (gross_profit_month / rev_month * 100) if rev_month else Decimal("0")
 
-    low_stock_count = (
-        db.query(InventoryItem)
-        .filter(InventoryItem.min_stock_level.isnot(None))
-        .filter(InventoryItem.quantity <= InventoryItem.min_stock_level)
-        .count()
-    )
-    pending_po_count = db.query(Order).filter(Order.status == "pending").count()
-    active_customers = db.query(Customer).filter(Customer.is_active == 1).count()
-    active_products = db.query(Product).filter(Product.is_active.is_(True)).count()
+    # --- Query 3: Counts (low stock, pending POs, active customers, active products) in ONE round-trip ---
+    low_stock_subq = db.query(func.count(InventoryItem.id)).filter(
+        InventoryItem.min_stock_level.isnot(None),
+        InventoryItem.quantity <= InventoryItem.min_stock_level,
+    ).as_scalar()
+    pending_po_subq = db.query(func.count(Order.id)).filter(Order.status == "pending").as_scalar()
+    active_cust_subq = db.query(func.count(Customer.id)).filter(Customer.is_active == 1).as_scalar()
+    active_prod_subq = db.query(func.count(Product.id)).filter(Product.is_active.is_(True)).as_scalar()
 
-    # Top-selling product (last 30 days by revenue)
+    counts_row = db.query(low_stock_subq, pending_po_subq, active_cust_subq, active_prod_subq).first()
+    low_stock_count = int(counts_row[0] or 0)
+    pending_po_count = int(counts_row[1] or 0)
+    active_customers = int(counts_row[2] or 0)
+    active_products = int(counts_row[3] or 0)
+
+    # --- Query 4: Top-selling product (last 30 days by revenue) ---
     since = datetime.combine(today - timedelta(days=30), datetime.min.time())
     since_utc = since.replace(tzinfo=user_tz).astimezone(tz_module.utc).replace(tzinfo=None)
     top_prod_row = (
@@ -235,6 +256,7 @@ def sales_trend(
     period: str = "daily",
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    warehouse_id: Optional[list[int]] = None,
     tz: str = "America/La_Paz",
 ) -> List[dict]:
     """Return a time series of revenue + sales count grouped by period.
@@ -276,6 +298,8 @@ def sales_trend(
         .filter(Sale.status == "completed")
         .filter(Sale.sale_date >= from_utc, Sale.sale_date < to_utc)
     )
+    if warehouse_id:
+        q = q.filter(Sale.warehouse_id.in_(warehouse_id))
     q = _apply_sales_visibility(q, user)
     rows = q.group_by("bucket").order_by("bucket").all()
 
@@ -293,19 +317,26 @@ def sales_trend(
 # Dashboard: inventory status
 # --------------------------------------------------------------------------- #
 def inventory_status(db: Session) -> dict:
-    total_qty_row = db.query(func.coalesce(func.sum(InventoryItem.quantity), 0)).first()
-    total_qty = int(total_qty_row[0] or 0)
+    # Query 1: Combined total quantity + total value (both scan inventory_items)
+    totals = db.query(
+        func.coalesce(func.sum(InventoryItem.quantity), 0),
+        func.coalesce(func.sum(InventoryItem.quantity * Product.unit_price), 0),
+    ).join(Product, Product.id == InventoryItem.product_id).first()
+    total_qty = int(totals[0] or 0)
+    total_value = _safe_dec(totals[1])
 
-    # Stock value at unit_price (sum quantity * product.unit_price)
-    total_value_row = (
-        db.query(func.coalesce(func.sum(InventoryItem.quantity * Product.unit_price), 0))
-        .join(Product, Product.id == InventoryItem.product_id)
-        .first()
-    )
-    total_value = _safe_dec(total_value_row[0])
-
-    low_stock_items = (
-        db.query(InventoryItem, Product, Warehouse)
+    # Query 2: Low stock items with out_of_stock_count computed in SQL
+    low_stock_rows = (
+        db.query(
+            InventoryItem.id,
+            InventoryItem.product_id,
+            InventoryItem.warehouse_id,
+            InventoryItem.quantity,
+            InventoryItem.min_stock_level,
+            Product.name,
+            Product.sku,
+            Warehouse.name,
+        )
         .join(Product, Product.id == InventoryItem.product_id)
         .join(Warehouse, Warehouse.id == InventoryItem.warehouse_id)
         .filter(InventoryItem.min_stock_level.isnot(None))
@@ -314,8 +345,9 @@ def inventory_status(db: Session) -> dict:
         .all()
     )
 
-    out_of_stock_count = sum(1 for inv, _, _ in low_stock_items if inv.quantity <= 0)
+    out_of_stock_count = sum(1 for row in low_stock_rows if row.quantity <= 0)
 
+    # Query 3: By-warehouse breakdown
     by_warehouse_rows = (
         db.query(
             Warehouse.id,
@@ -332,7 +364,7 @@ def inventory_status(db: Session) -> dict:
     return {
         "total_quantity": total_qty,
         "total_value": total_value,
-        "low_stock_count": len(low_stock_items),
+        "low_stock_count": len(low_stock_rows),
         "out_of_stock_count": out_of_stock_count,
         "by_warehouse": [
             {
@@ -345,17 +377,17 @@ def inventory_status(db: Session) -> dict:
         ],
         "low_stock_items": [
             {
-                "product_id": inv.product_id,
-                "product_name": prod.name,
-                "sku": prod.sku,
-                "warehouse_id": inv.warehouse_id,
-                "warehouse_name": wh.name,
-                "quantity": inv.quantity,
-                "min_stock_level": inv.min_stock_level or 0,
+                "product_id": row.product_id,
+                "product_name": row.name,
+                "sku": row.sku,
+                "warehouse_id": row.warehouse_id,
+                "warehouse_name": row[7],
+                "quantity": row.quantity,
+                "min_stock_level": row.min_stock_level or 0,
                 "is_low_stock": True,
-                "is_out_of_stock": inv.quantity <= 0,
+                "is_out_of_stock": row.quantity <= 0,
             }
-            for inv, prod, wh in low_stock_items
+            for row in low_stock_rows
         ],
     }
 
@@ -368,6 +400,7 @@ def top_products(
     user: User,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    warehouse_id: Optional[list[int]] = None,
     limit: int = 10,
 ) -> List[dict]:
     from_dt, to_dt = _coerce_range(from_date, to_date)
@@ -383,6 +416,8 @@ def top_products(
         .join(Sale, Sale.id == SaleItem.sale_id)
         .filter(Sale.status == "completed")
     )
+    if warehouse_id:
+        q = q.filter(Sale.warehouse_id.in_(warehouse_id))
     if from_dt is not None:
         q = q.filter(Sale.sale_date >= from_dt)
     if to_dt is not None:
@@ -454,6 +489,7 @@ def payment_method_breakdown(
     user: User,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    warehouse_id: Optional[list[int]] = None,
 ) -> List[dict]:
     from_dt, to_dt = _coerce_range(from_date, to_date)
     q = (
@@ -464,6 +500,8 @@ def payment_method_breakdown(
         )
         .filter(Sale.status == "completed")
     )
+    if warehouse_id:
+        q = q.filter(Sale.warehouse_id.in_(warehouse_id))
     if from_dt is not None:
         q = q.filter(Sale.sale_date >= from_dt)
     if to_dt is not None:
@@ -486,6 +524,7 @@ def sales_report(
     to_date: Optional[date] = None,
     seller_id: Optional[int] = None,
     customer_id: Optional[int] = None,
+    warehouse_id: Optional[list[int]] = None,
 ) -> List[dict]:
     from_dt, to_dt = _coerce_range(from_date, to_date)
     q = (
@@ -505,12 +544,17 @@ def sales_report(
             func.coalesce(func.sum(SaleItem.total_price), 0),
             Sale.tax_amount,
             Sale.total_amount,
+            Warehouse.id,
+            Warehouse.name,
         )
         .join(SaleItem, SaleItem.sale_id == Sale.id)
         .outerjoin(Customer, Customer.id == Sale.customer_id)
         .outerjoin(User, User.id == Sale.user_id)
+        .outerjoin(Warehouse, Warehouse.id == Sale.warehouse_id)
         .filter(Sale.status == "completed")
     )
+    if warehouse_id:
+        q = q.filter(Sale.warehouse_id.in_(warehouse_id))
     if from_dt is not None:
         q = q.filter(Sale.sale_date >= from_dt)
     if to_dt is not None:
@@ -523,7 +567,7 @@ def sales_report(
     rows = q.group_by(
         Sale.id, Sale.sale_date, Customer.id, Customer.first_name, Customer.last_name,
         User.id, User.first_name, User.last_name, Sale.payment_method, Sale.status,
-        Sale.tax_amount, Sale.total_amount,
+        Sale.tax_amount, Sale.total_amount, Warehouse.id, Warehouse.name,
     ).order_by(Sale.sale_date.desc()).all()
 
     return [
@@ -541,6 +585,7 @@ def sales_report(
             "subtotal": _row_num(r[12]),
             "tax_amount": _row_num(r[13]),
             "total_amount": _row_num(r[14]),
+            "warehouse_name": r[16],
         }
         for r in rows
     ]
@@ -549,24 +594,36 @@ def sales_report(
 _COST_VISIBILITY_ROLES = {"admin", "gerente"}
 
 
-def _latest_cost_subquery():
-    """Latest received OrderItem.unit_cost per product, correlated on Product.id."""
-    from sqlalchemy import select
+def _latest_cost_cte(db: Session):
+    """Pre-computed latest received unit_cost per product using window function.
+
+    Returns a subquery with columns: product_id, unit_cost, rn
+    Use with: .outerjoin(cte, cte.c.product_id == X).filter(cte.c.rn == 1)
+    """
     return (
-        select(OrderItem.unit_cost)
-        .select_from(OrderItem)
+        db.query(
+            OrderItem.product_id,
+            OrderItem.unit_cost,
+            func.row_number().over(
+                partition_by=OrderItem.product_id,
+                order_by=Order.received_date.desc(),
+            ).label("rn"),
+        )
         .join(Order, Order.id == OrderItem.order_id)
-        .where(OrderItem.product_id == Product.id)
-        .where(Order.status == "received")
-        .where(Order.received_date.isnot(None))
-        .order_by(Order.received_date.desc())
-        .limit(1)
-        .scalar_subquery()
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .subquery()
     )
 
 
 def inventory_report(db: Session, user: User) -> List[dict]:
-    cost_subq = _latest_cost_subquery()
+    cost_cte = _latest_cost_cte(db)
+    cost_subq = (
+        select(cost_cte.c.unit_cost)
+        .where(cost_cte.c.product_id == Product.id)
+        .where(cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
     can_see_cost = bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
 
     rows = (
@@ -773,6 +830,7 @@ def profit_report(
     user: User,
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    warehouse_id: Optional[list[int]] = None,
 ) -> List[dict]:
     """Per-product gross profit using historical COGS.
 
@@ -783,17 +841,14 @@ def profit_report(
     """
     from_dt, to_dt = _coerce_range(from_date, to_date)
 
-    # Correlated subquery: latest unit_cost for a product at or before a sale date.
-    latest_cost_subq = (
-        db.query(OrderItem.unit_cost)
-        .join(Order, Order.id == OrderItem.order_id)
-        .filter(OrderItem.product_id == SaleItem.product_id)
-        .filter(Order.status == "received")
-        .filter(Order.received_date.isnot(None))
-        .filter(Order.received_date <= Sale.sale_date)
-        .order_by(Order.received_date.desc())
-        .limit(1)
-    ).scalar_subquery()
+    # Pre-computed latest unit_cost per product (window function, O(N) instead of O(N*M))
+    cost_cte = _latest_cost_cte(db)
+    cost_subq = (
+        select(cost_cte.c.unit_cost)
+        .where(cost_cte.c.product_id == SaleItem.product_id)
+        .where(cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
 
     q = (
         db.query(
@@ -802,12 +857,14 @@ def profit_report(
             Product.sku,
             func.coalesce(func.sum(SaleItem.quantity), 0),
             func.coalesce(func.sum(SaleItem.total_price), 0),
-            func.coalesce(func.sum(SaleItem.quantity * latest_cost_subq), 0),
+            func.coalesce(func.sum(SaleItem.quantity * cost_subq), 0),
         )
         .join(SaleItem, SaleItem.product_id == Product.id)
         .join(Sale, Sale.id == SaleItem.sale_id)
         .filter(Sale.status == "completed")
     )
+    if warehouse_id:
+        q = q.filter(Sale.warehouse_id.in_(warehouse_id))
     if from_dt is not None:
         q = q.filter(Sale.sale_date >= from_dt)
     if to_dt is not None:
@@ -838,6 +895,7 @@ def profit_summary_report(
     period: str = "daily",
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    warehouse_id: Optional[list[int]] = None,
 ) -> List[dict]:
     """Time-series gross profit summary grouped by day/week/month.
 
@@ -861,28 +919,28 @@ def profit_summary_report(
     else:
         bucket = func.date_trunc("month", Sale.sale_date)
 
-    latest_cost_subq = (
-        db.query(OrderItem.unit_cost)
-        .join(Order, Order.id == OrderItem.order_id)
-        .filter(OrderItem.product_id == SaleItem.product_id)
-        .filter(Order.status == "received")
-        .filter(Order.received_date.isnot(None))
-        .filter(Order.received_date <= Sale.sale_date)
-        .order_by(Order.received_date.desc())
-        .limit(1)
-    ).scalar_subquery()
+    # Pre-computed latest unit_cost per product (window function, O(N) instead of O(N*M))
+    cost_cte = _latest_cost_cte(db)
+    cost_subq = (
+        select(cost_cte.c.unit_cost)
+        .where(cost_cte.c.product_id == SaleItem.product_id)
+        .where(cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
 
     q = (
         db.query(
             bucket.label("bucket"),
             func.coalesce(func.sum(SaleItem.total_price), 0),
-            func.coalesce(func.sum(SaleItem.quantity * latest_cost_subq), 0),
+            func.coalesce(func.sum(SaleItem.quantity * cost_subq), 0),
             func.count(Sale.id),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .filter(Sale.status == "completed")
         .filter(Sale.sale_date >= from_dt, Sale.sale_date < to_dt)
     )
+    if warehouse_id:
+        q = q.filter(Sale.warehouse_id.in_(warehouse_id))
     q = _apply_sales_visibility(q, user)
     rows = q.group_by("bucket").order_by("bucket").all()
 
@@ -1139,7 +1197,7 @@ def rows_to_csv_response(
 SALES_REPORT_HEADERS = [
     "sale_id", "sale_date", "customer_id", "customer_name", "seller_id",
     "seller_name", "payment_method", "status", "items_count", "units_sold",
-    "subtotal", "tax_amount", "total_amount",
+    "subtotal", "tax_amount", "total_amount", "warehouse_name",
 ]
 INVENTORY_REPORT_HEADERS = [
     "product_id", "name", "sku", "category_id", "category_name",

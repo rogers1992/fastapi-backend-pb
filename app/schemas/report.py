@@ -20,6 +20,7 @@ class SalesReportRow(BaseSchema):
     subtotal: Decimal
     tax_amount: Decimal
     total_amount: Decimal
+    warehouse_name: Optional[str]
 
 
 class InventoryReportRow(BaseSchema):

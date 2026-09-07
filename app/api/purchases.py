@@ -16,7 +16,7 @@ from ..services.notification_service import NotificationService
 router = APIRouter()
 
 
-@router.get("/", response_model=List[OrderResponse])
+@router.get("", response_model=List[OrderResponse])
 async def get_purchases(
     skip: int = 0,
     limit: int = 100,
@@ -59,7 +59,7 @@ async def get_purchase(
     return order
 
 
-@router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_purchase(
     order: OrderCreate,
     db: Session = Depends(get_db),
@@ -94,8 +94,12 @@ async def create_purchase(
     db.add(db_order)
     db.flush()
 
+    # Pre-fetch all products in ONE query
+    product_ids = [item.product_id for item in order.items]
+    products = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()}
+
     for item_data in order.items:
-        product = db.query(Product).filter(Product.id == item_data.product_id).first()
+        product = products.get(item_data.product_id)
         if not product:
             db.rollback()
             raise HTTPException(
@@ -164,15 +168,16 @@ async def receive_purchase(
 
     affected_inventory: List[InventoryItem] = []
 
+    # Pre-fetch all inventory items for this warehouse in ONE query
+    product_ids = [item.product_id for item in order.order_items]
+    existing_inv = db.query(InventoryItem).filter(
+        InventoryItem.product_id.in_(product_ids),
+        InventoryItem.warehouse_id == order.warehouse_id,
+    ).all()
+    inv_map = {(i.product_id, i.warehouse_id): i for i in existing_inv}
+
     for item in order.order_items:
-        inventory = (
-            db.query(InventoryItem)
-            .filter(
-                InventoryItem.product_id == item.product_id,
-                InventoryItem.warehouse_id == order.warehouse_id,
-            )
-            .first()
-        )
+        inventory = inv_map.get((item.product_id, order.warehouse_id))
         if not inventory:
             inventory = InventoryItem(
                 product_id=item.product_id,

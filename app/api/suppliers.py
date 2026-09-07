@@ -10,7 +10,7 @@ from ..models.user import User
 router = APIRouter()
 
 
-@router.get("/", response_model=List[SupplierResponse])
+@router.get("", response_model=List[SupplierResponse])
 async def get_suppliers(
     skip: int = 0,
     limit: int = 100,
@@ -33,7 +33,7 @@ async def get_supplier(
     return supplier
 
 
-@router.post("/", response_model=SupplierResponse)
+@router.post("", response_model=SupplierResponse)
 async def create_supplier(
     supplier: SupplierCreate,
     db: Session = Depends(get_db),

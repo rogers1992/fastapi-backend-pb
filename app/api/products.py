@@ -15,7 +15,7 @@ from ..config import settings
 from ..supabase import get_supabase
 from ..services.image_service import compress_image, get_compressed_filename
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from ..services.image_service import ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTS
 
 router = APIRouter()
@@ -29,18 +29,31 @@ def _user_can_see_cost(user: User) -> bool:
     return bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
 
 
-def _latest_cost_subquery():
-    """Latest received OrderItem.unit_cost per product, correlated on Product.id."""
-    from sqlalchemy import select
+def _latest_cost_cte(db: Session):
+    """Pre-computed latest received unit_cost per product using window function."""
     return (
-        select(OrderItem.unit_cost)
-        .select_from(OrderItem)
+        db.query(
+            OrderItem.product_id,
+            OrderItem.unit_cost,
+            func.row_number().over(
+                partition_by=OrderItem.product_id,
+                order_by=Order.received_date.desc(),
+            ).label("rn"),
+        )
         .join(Order, Order.id == OrderItem.order_id)
-        .where(OrderItem.product_id == Product.id)
-        .where(Order.status == "received")
-        .where(Order.received_date.isnot(None))
-        .order_by(Order.received_date.desc())
-        .limit(1)
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .subquery()
+    )
+
+
+def _latest_cost_subquery(db: Session):
+    """Latest received OrderItem.unit_cost per product (non-correlated CTE)."""
+    cte = _latest_cost_cte(db)
+    return (
+        select(cte.c.unit_cost)
+        .where(cte.c.product_id == Product.id)
+        .where(cte.c.rn == 1)
         .scalar_subquery()
     )
 
@@ -64,7 +77,7 @@ def _delete_supabase_image(image_url: str | None) -> None:
         pass
 
 
-@router.get("/")
+@router.get("")
 async def get_products(
     skip: int = 0,
     limit: int = 10,
@@ -73,7 +86,7 @@ async def get_products(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    cost_subq = _latest_cost_subquery()
+    cost_subq = _latest_cost_subquery(db)
     from sqlalchemy.orm import joinedload
     query = db.query(Product, cost_subq.label("current_cost")).options(joinedload(Product.images))
     if not include_inactive:
@@ -138,7 +151,7 @@ async def get_product(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    cost_subq = _latest_cost_subquery()
+    cost_subq = _latest_cost_subquery(db)
     from sqlalchemy.orm import joinedload
     row = (
         db.query(Product, cost_subq.label("current_cost"))
@@ -190,7 +203,7 @@ async def get_product_by_barcode(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
-    cost_subq = _latest_cost_subquery()
+    cost_subq = _latest_cost_subquery(db)
     from sqlalchemy.orm import joinedload
     row = (
         db.query(Product, cost_subq.label("current_cost"))
@@ -236,7 +249,7 @@ async def get_product_by_barcode(
     }
 
 
-@router.post("/", response_model=ProductResponse)
+@router.post("", response_model=ProductResponse)
 async def create_product(
     product: ProductCreate,
     db: Session = Depends(get_db),
