@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import text
 import traceback
 from .config import settings
-from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard
+from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard, cash_register
 from .database import engine, Base
 
 
@@ -87,10 +87,22 @@ def _ensure_sales_warehouse_id_column() -> None:
         traceback.print_exc()
 
 
+def _ensure_sales_cash_session_id_column() -> None:
+    """
+    Backfill the sales.cash_session_id column on DBs that predate it.
+    """
+    try:
+        with engine.connect() as conn:
+            _ensure_column("sales", "cash_session_id", "INTEGER REFERENCES cash_sessions(id)", conn)
+    except Exception:
+        traceback.print_exc()
+
+
 _ensure_products_image_url_column()
 _ensure_customer_is_active_column()
 _ensure_orders_total_amount_column()
 _ensure_sales_warehouse_id_column()
+_ensure_sales_cash_session_id_column()
 Base.metadata.create_all(bind=engine)
 
 # Ensure the upload directory exists before mounting StaticFiles.
@@ -136,6 +148,7 @@ app.include_router(customers.router, prefix="/api/customers", tags=["Customers"]
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(cash_register.router, prefix="/api", tags=["Cash Register"])
 
 # Serve uploaded product images (and any future uploads) as static files.
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

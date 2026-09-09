@@ -8,6 +8,7 @@ from ..database import get_db
 from ..models.sale import Sale, SaleItem
 from ..models.product import Product
 from ..models.inventory import InventoryItem, Warehouse
+from ..models.cash_register import CashSession, CashRegister, CashRegisterStatus
 from ..schemas.sale import SaleCreate, SaleResponse
 from ..core.dependencies import get_current_user, require_permission
 from ..models.user import User
@@ -155,6 +156,26 @@ async def create_sale(
     )
     db.add(db_sale)
     db.flush()
+
+    # Auto-link sale to open cash session for this warehouse
+    open_session = None
+    if warehouse_id:
+        open_session = db.query(CashSession).join(
+            CashRegister, CashSession.register_id == CashRegister.id
+        ).filter(
+            CashRegister.warehouse_id == warehouse_id,
+            CashSession.status == CashRegisterStatus.open,
+        ).first()
+        if open_session:
+            db_sale.cash_session_id = open_session.id
+
+    # Block efectivo sales without an open session
+    if sale.payment_method == "efectivo" and warehouse_id and not open_session:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="No hay caja abierta para este almacen. Debes abrir caja antes de registrar ventas en efectivo.",
+        )
 
     # Pre-fetch warehouse ONCE (same for all items)
     warehouse_name = "General"

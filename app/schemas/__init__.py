@@ -32,6 +32,11 @@ from .product import ProductCreate, ProductResponse, ProductUpdate
 from .inventory import InventoryItemCreate, InventoryItemResponse, InventoryItemUpdate, InventoryTransfer
 from .sale import SaleCreate, SaleResponse, SaleItemCreate, SaleItemResponse
 from .customer import CustomerCreate, CustomerResponse, CustomerUpdate
+from .cash_register import (
+    CashRegisterCreate, CashRegisterUpdate, CashRegisterResponse,
+    CashMovementCreate, CashMovementResponse,
+    CashSessionOpen, CashSessionClose, CashSessionResponse, CashSessionSummary,
+)
 
 
 __all__ = [
@@ -42,5 +47,8 @@ __all__ = [
     'InventoryItemCreate', 'InventoryItemResponse', 'InventoryItemUpdate', 'InventoryTransfer',
     'SaleCreate', 'SaleResponse', 'SaleItemCreate', 'SaleItemResponse',
     'CustomerCreate', 'CustomerResponse', 'CustomerUpdate',
+    'CashRegisterCreate', 'CashRegisterUpdate', 'CashRegisterResponse',
+    'CashMovementCreate', 'CashMovementResponse',
+    'CashSessionOpen', 'CashSessionClose', 'CashSessionResponse', 'CashSessionSummary',
     'BaseSchema',
 ]

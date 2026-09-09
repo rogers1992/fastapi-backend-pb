@@ -140,7 +140,7 @@ def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz", wareh
         func.count(case((Sale.sale_date >= month_start_utc, Sale.id))),
         func.coalesce(func.sum(case((Sale.sale_date >= month_start_utc, Sale.tax_amount))), 0),
     ).filter(
-        Sale.sale_date >= week_start_utc,  # Earliest boundary
+        Sale.sale_date >= month_start_utc,  # Earliest boundary (month scope)
         Sale.sale_date < today_end_utc,
     ).first()
 
@@ -176,7 +176,7 @@ def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz", wareh
         .outerjoin(latest_cost_cte, latest_cost_cte.c.product_id == SaleItem.product_id)
         .filter(latest_cost_cte.c.rn == 1)
         .filter(Sale.status == "completed")
-        .filter(Sale.sale_date >= week_start_utc, Sale.sale_date < today_end_utc)
+        .filter(Sale.sale_date >= month_start_utc, Sale.sale_date < today_end_utc)
     )
     if warehouse_id:
         cogs_base = cogs_base.filter(Sale.warehouse_id.in_(warehouse_id))
