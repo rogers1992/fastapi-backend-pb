@@ -37,6 +37,10 @@ from .cash_register import (
     CashMovementCreate, CashMovementResponse,
     CashSessionOpen, CashSessionClose, CashSessionResponse, CashSessionSummary,
 )
+from .expense import (
+    ExpenseCategoryResponse, ExpenseCreate, ExpenseUpdate, ExpenseResponse,
+    ExpenseSummary, IncomeStatementResponse,
+)
 
 
 __all__ = [
@@ -50,5 +54,7 @@ __all__ = [
     'CashRegisterCreate', 'CashRegisterUpdate', 'CashRegisterResponse',
     'CashMovementCreate', 'CashMovementResponse',
     'CashSessionOpen', 'CashSessionClose', 'CashSessionResponse', 'CashSessionSummary',
+    'ExpenseCategoryResponse', 'ExpenseCreate', 'ExpenseUpdate', 'ExpenseResponse',
+    'ExpenseSummary', 'IncomeStatementResponse',
     'BaseSchema',
 ]

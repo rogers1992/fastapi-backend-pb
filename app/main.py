@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import text
 import traceback
 from .config import settings
-from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard, cash_register
+from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard, cash_register, expenses
 from .database import engine, Base
 
 
@@ -119,6 +119,38 @@ if settings.SEED_DEFAULTS:
     finally:
         db.close()
 
+
+def _seed_expense_categories() -> None:
+    """Seed predefined expense categories if they don't exist."""
+    try:
+        from .database import SessionLocal
+        from .models.expense import ExpenseCategory
+        db = SessionLocal()
+        try:
+            if db.query(ExpenseCategory).count() == 0:
+                categories_data = [
+                    ("Alquiler", "Alquiler de local comercial", 1),
+                    ("Servicios", "Luz, agua, internet, telefono", 2),
+                    ("Sueldos", "Sueldos y cargas sociales", 3),
+                    ("Transporte", "Transporte y logistica", 4),
+                    ("Mantenimiento", "Reparaciones y mantenimiento", 5),
+                    ("Impuestos", "Impuestos y tasas", 6),
+                    ("Suministros", "Suministros de oficina", 7),
+                    ("Marketing", "Publicidad y marketing", 8),
+                    ("Otros", "Otros gastos operacionales", 9),
+                ]
+                for name, desc, order in categories_data:
+                    db.add(ExpenseCategory(name=name, description=desc, sort_order=order))
+                db.commit()
+                print(f"[seed] Seeded {len(categories_data)} expense categories")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[seed] expense categories: {e}")
+
+
+_seed_expense_categories()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -149,6 +181,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(cash_register.router, prefix="/api", tags=["Cash Register"])
+app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])
 
 # Serve uploaded product images (and any future uploads) as static files.
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")

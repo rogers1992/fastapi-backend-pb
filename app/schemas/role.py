@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 
 
-VALID_RESOURCES = ["products", "inventory", "sales", "purchases", "customers", "users", "roles", "reports", "categories", "suppliers","cash_register"]
+VALID_RESOURCES = ["products", "inventory", "sales", "purchases", "customers", "users", "roles", "reports", "categories", "suppliers","cash_register", "expenses"]
 VALID_ACTIONS = ["read", "create", "update", "delete"]
 
 

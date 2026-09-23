@@ -7,6 +7,7 @@ from .order import Order, OrderItem
 from .customer import Customer, Loyalty
 from .notification import Notification
 from .cash_register import CashRegister, CashSession, CashMovement
+from .expense import ExpenseCategory, Expense
 
 __all__ = [
     'User', 'Role',
@@ -17,4 +18,5 @@ __all__ = [
     'Customer', 'Loyalty',
     'Notification',
     'CashRegister', 'CashSession', 'CashMovement',
+    'ExpenseCategory', 'Expense',
 ]

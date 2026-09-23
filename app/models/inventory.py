@@ -41,4 +41,5 @@ class Warehouse(Base):
     orders = relationship("Order", back_populates="warehouse")
     sales = relationship("Sale", back_populates="warehouse")
     cash_registers = relationship("CashRegister", back_populates="warehouse")
+    expenses = relationship("Expense", back_populates="warehouse")
     users = relationship("User", secondary=user_warehouses, back_populates="warehouses")
