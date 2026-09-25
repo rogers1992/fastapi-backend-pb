@@ -1,13 +1,28 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from typing import List
+from zoneinfo import available_timezones
 from ..config import settings
 from ..database import get_db
 from ..models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+_DEFAULT_TZ = "America/La_Paz"
+_VALID_TIMEZONES = available_timezones()
+
+
+async def get_user_timezone(
+    tz: str = Header(default=_DEFAULT_TZ, alias="X-Timezone"),
+) -> str:
+    """Extract and validate the user's timezone from the X-Timezone header.
+
+    Falls back to America/La_Paz if the header is missing or contains an
+    invalid IANA timezone identifier.
+    """
+    return tz if tz in _VALID_TIMEZONES else _DEFAULT_TZ
 
 
 async def get_current_user(

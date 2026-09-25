@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
 from ..models.inventory import Warehouse
+from ..models.cash_register import CashRegister
 from ..schemas.warehouse import WarehouseCreate, WarehouseUpdate, WarehouseResponse
 from ..core.dependencies import require_permission
 from ..models.user import User
@@ -10,7 +11,7 @@ from ..models.user import User
 router = APIRouter()
 
 
-@router.get("/", response_model=List[WarehouseResponse])
+@router.get("", response_model=List[WarehouseResponse])
 async def get_warehouses(
     skip: int = 0,
     limit: int = 100,
@@ -38,7 +39,7 @@ async def get_warehouse(
     return warehouse
 
 
-@router.post("/", response_model=WarehouseResponse)
+@router.post("", response_model=WarehouseResponse)
 async def create_warehouse(
     warehouse: WarehouseCreate,
     db: Session = Depends(get_db),
@@ -46,6 +47,15 @@ async def create_warehouse(
 ):
     db_warehouse = Warehouse(**warehouse.model_dump())
     db.add(db_warehouse)
+    db.flush()
+
+    # Auto-create a cash register for this warehouse
+    register = CashRegister(
+        name=f"Caja - {db_warehouse.name}",
+        warehouse_id=db_warehouse.id,
+    )
+    db.add(register)
+
     db.commit()
     db.refresh(db_warehouse)
     return db_warehouse

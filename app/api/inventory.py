@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import case, func
 from typing import List
 from ..database import get_db
 from ..models.inventory import InventoryItem, Warehouse
@@ -51,7 +51,7 @@ def _check_low_stock(db: Session, item: InventoryItem) -> None:
     )
 
 
-@router.get("/", response_model=List[InventoryItemResponse])
+@router.get("", response_model=List[InventoryItemResponse])
 async def get_inventory(
     skip: int = 0,
     limit: int = 100,
@@ -72,7 +72,7 @@ async def get_inventory_by_warehouse(
     return inventory
 
 
-@router.post("/", response_model=InventoryItemResponse)
+@router.post("", response_model=InventoryItemResponse)
 async def create_inventory_item(
     item: InventoryItemCreate,
     db: Session = Depends(get_db),
@@ -176,22 +176,21 @@ async def get_inventory_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("inventory", "read")),
 ):
-    total_items = db.query(InventoryItem).count()
-    total_warehouses = (
-        db.query(Warehouse).filter(Warehouse.is_active == True).count()
-    )
-    low_stock_count = (
-        db.query(InventoryItem)
-        .filter(InventoryItem.quantity <= InventoryItem.min_stock_level)
-        .count()
-    )
-    total_quantity = 0
-    result = db.query(func.sum(InventoryItem.quantity)).scalar()
-    if result is not None:
-        total_quantity = int(result)
+    # Query 1: All inventory aggregates in ONE round-trip
+    inv_result = db.query(
+        func.count(InventoryItem.id),
+        func.coalesce(func.sum(
+            case((InventoryItem.quantity <= InventoryItem.min_stock_level, 1), else_=0)
+        ), 0),
+        func.coalesce(func.sum(InventoryItem.quantity), 0),
+    ).first()
+
+    # Query 2: Active warehouse count
+    wh_count = db.query(func.count(Warehouse.id)).filter(Warehouse.is_active == True).scalar()
+
     return {
-        "total_items": total_items,
-        "total_warehouses": total_warehouses,
-        "low_stock_count": low_stock_count,
-        "total_quantity": total_quantity,
+        "total_items": int(inv_result[0] or 0),
+        "total_warehouses": int(wh_count or 0),
+        "low_stock_count": int(inv_result[1] or 0),
+        "total_quantity": int(inv_result[2] or 0),
     }

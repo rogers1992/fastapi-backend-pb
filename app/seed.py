@@ -20,6 +20,7 @@ DEFAULT_ROLES = [
         "users": ["read", "create", "update", "delete"],
         "roles": ["read", "create", "update", "delete"],
         "reports": ["read", "create"],
+        "cash_register": ["read", "create", "update", "delete"],
     }, "Administrador con acceso completo", True),
     ("gerente", {
         "products": ["read", "create", "update"],
@@ -28,12 +29,14 @@ DEFAULT_ROLES = [
         "customers": ["read", "create", "update"],
         "users": ["read"],
         "reports": ["read", "create"],
+        "cash_register": ["read", "create", "update"],
     }, "Gerente de tienda", True),
     ("vendedor", {
         "products": ["read"],
         "inventory": ["read"],
         "sales": ["read", "create"],
         "customers": ["read", "create"],
+        "cash_register": ["read", "create", "update"],
     }, "Vendedor", True),
     ("almacen", {
         "products": ["read"],

@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional
 
 
-class CategoryBase(BaseModel):
+class CategoryBase(BaseSchema):
     name: str
     description: Optional[str] = None
     parent_id: Optional[int] = None
@@ -13,7 +15,7 @@ class CategoryCreate(CategoryBase):
     pass
 
 
-class CategoryUpdate(BaseModel):
+class CategoryUpdate(BaseSchema):
     name: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[int] = None

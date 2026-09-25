@@ -165,7 +165,7 @@ Roles store permissions as a JSONB map of `resource → actions`:
 |---|---|---|---|
 | GET | `/api/sales/` | `sales.read` | List all sales (newest first) |
 | GET | `/api/sales/{id}` | `sales.read` | Get sale details |
-| POST | `/api/sales/` | `sales.create` | Create sale (auto 16% tax, decrements inventory) |
+| POST | `/api/sales/` | `sales.create` | Create sale (auto configurable tax, decrements inventory) |
 
 ### Customers
 | Method | Path | Permission | Description |

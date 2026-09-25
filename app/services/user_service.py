@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from typing import Optional, List
 from ..models.user import User, Role
+from ..models.inventory import Warehouse
 from ..schemas.user import UserCreate, UserUpdate
 from ..core.security import get_password_hash, verify_password
 
@@ -65,6 +66,10 @@ class UserService:
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        if user_data.warehouse_ids is not None:
+            UserService._sync_user_warehouses(db, user.id, user_data.warehouse_ids)
+
         return user
 
     @staticmethod
@@ -85,10 +90,16 @@ class UserService:
             if not role:
                 raise ValueError("Role not found")
 
+        warehouse_ids = update_data.pop("warehouse_ids", None)
+
         for key, value in update_data.items():
             setattr(user, key, value)
 
         db.commit()
+
+        if warehouse_ids is not None:
+            UserService._sync_user_warehouses(db, user_id, warehouse_ids)
+
         db.refresh(user)
         return user
 
@@ -116,4 +127,23 @@ class UserService:
     def update_last_login(db: Session, user_id: int):
         from sqlalchemy.sql import func
         db.query(User).filter(User.id == user_id).update({"last_login": func.now()})
+        db.commit()
+
+    @staticmethod
+    def _sync_user_warehouses(db: Session, user_id: int, warehouse_ids: List[int]) -> None:
+        db.execute(
+            text("DELETE FROM user_warehouses WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        for warehouse_id in warehouse_ids:
+            warehouse = db.query(Warehouse).filter(
+                Warehouse.id == warehouse_id,
+                Warehouse.is_active == True
+            ).first()
+            if not warehouse:
+                raise ValueError(f"Warehouse {warehouse_id} not found or inactive")
+            db.execute(
+                text("INSERT INTO user_warehouses (user_id, warehouse_id) VALUES (:user_id, :warehouse_id)"),
+                {"user_id": user_id, "warehouse_id": warehouse_id}
+            )
         db.commit()

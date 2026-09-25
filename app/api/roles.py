@@ -10,7 +10,7 @@ from ..services.role_service import RoleService
 router = APIRouter()
 
 
-@router.get("/", response_model=List[RoleResponse])
+@router.get("", response_model=List[RoleResponse])
 async def list_roles(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("roles", "read")),
@@ -30,7 +30,7 @@ async def get_role(
     return role
 
 
-@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role_data: RoleCreate,
     db: Session = Depends(get_db),

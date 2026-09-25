@@ -11,6 +11,8 @@ CREATE TABLE roles (
     description TEXT,
     is_system BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 2. Users Table
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -32,7 +34,7 @@ CREATE TABLE warehouses (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     location TEXT,
-    contact_name VARCHAR(200),
+    contact_info JSONB,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -78,6 +80,10 @@ CREATE TABLE products (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX idx_products_is_active ON products(is_active);
+CREATE INDEX idx_products_category_id ON products(category_id);
+CREATE INDEX idx_products_supplier_id ON products(supplier_id);
+
 -- 7. Inventory Items Table
 CREATE TABLE inventory_items (
     id SERIAL PRIMARY KEY,
@@ -92,6 +98,9 @@ CREATE TABLE inventory_items (
     UNIQUE(product_id, warehouse_id)
 );
 
+CREATE INDEX idx_inventory_product_id ON inventory_items(product_id);
+CREATE INDEX idx_inventory_warehouse_id ON inventory_items(warehouse_id);
+
 -- 8. Customers Table
 CREATE TABLE customers (
     id SERIAL PRIMARY KEY,
@@ -101,8 +110,11 @@ CREATE TABLE customers (
     phone VARCHAR(20),
     address TEXT,
     date_of_birth DATE,
+    is_active INTEGER DEFAULT 1 NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_customers_is_active ON customers(is_active);
 
 -- 9. Loyalty Table
 CREATE TABLE loyalty (
@@ -114,14 +126,12 @@ CREATE TABLE loyalty (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Add loyalty_id to customers
-ALTER TABLE customers ADD COLUMN loyalty_id INTEGER REFERENCES loyalty(id);
-
 -- 10. Sales Table
 CREATE TABLE sales (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES customers(id),
     user_id INTEGER REFERENCES users(id),
+    warehouse_id INTEGER REFERENCES warehouses(id),
     payment_method VARCHAR(50) NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
     tax_amount DECIMAL(10,2) DEFAULT 0,
@@ -129,6 +139,12 @@ CREATE TABLE sales (
     sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT
 );
+
+CREATE INDEX idx_sales_status ON sales(status);
+CREATE INDEX idx_sales_customer_id ON sales(customer_id);
+CREATE INDEX idx_sales_user_id ON sales(user_id);
+CREATE INDEX idx_sales_sale_date ON sales(sale_date DESC);
+CREATE INDEX idx_sales_warehouse_id ON sales(warehouse_id);
 
 -- 11. Sale Items Table
 CREATE TABLE sale_items (
@@ -142,12 +158,16 @@ CREATE TABLE sale_items (
     notes TEXT
 );
 
+CREATE INDEX idx_sale_items_sale_id ON sale_items(sale_id);
+CREATE INDEX idx_sale_items_product_id ON sale_items(product_id);
+
 -- 12. Orders Table (Purchase Orders)
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
-    supplier_id INTEGER REFERENCES suppliers(id),
+    supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
     warehouse_id INTEGER REFERENCES warehouses(id),
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    total_amount DECIMAL(10,2) DEFAULT 0,
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expected_date DATE,
     received_date DATE,
@@ -155,17 +175,25 @@ CREATE TABLE orders (
     notes TEXT
 );
 
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_supplier_id ON orders(supplier_id);
+CREATE INDEX idx_orders_warehouse_id ON orders(warehouse_id);
+CREATE INDEX idx_orders_order_date ON orders(order_date DESC);
+
 -- 13. Order Items Table
 CREATE TABLE order_items (
     id SERIAL PRIMARY KEY,
     order_id INTEGER REFERENCES orders(id),
     product_id INTEGER REFERENCES products(id),
     quantity INTEGER NOT NULL,
-    unit_price DECIMAL(10,2) NOT NULL,
+    unit_cost DECIMAL(10,2) NOT NULL,
     total_price DECIMAL(10,2) NOT NULL,
     received_quantity INTEGER DEFAULT 0,
     notes TEXT
 );
+
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 
 -- 14. Payments Table
 CREATE TABLE payments (
@@ -191,20 +219,36 @@ CREATE TABLE audit_trail (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 16. Notifications Table
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    data JSONB,
+    is_read BOOLEAN DEFAULT false NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_type ON notifications(type);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+
 -- ============================================
 -- SEED DATA
 -- ============================================
 
 -- Roles
 INSERT INTO roles (name, permissions, description, is_system) VALUES
-('admin', '{"products": ["read", "create", "update", "delete"], "inventory": ["read", "create", "update", "delete"], "sales": ["read", "create", "update", "delete"], "customers": ["read", "create", "update", "delete"], "users": ["read", "create", "update", "delete"], "roles": ["read", "create", "update", "delete"], "reports": ["read", "create"]}', 'Administrador con acceso completo', true),
-('gerente', '{"products": ["read", "create", "update"], "inventory": ["read", "create", "update"], "sales": ["read", "create", "update"], "customers": ["read", "create", "update"], "users": ["read"], "reports": ["read", "create"]}', 'Gerente de tienda', true),
-('vendedor', '{"products": ["read"], "inventory": ["read"], "sales": ["read", "create"], "customers": ["read", "create"]}', 'Vendedor', true),
-('almacen', '{"products": ["read"], "inventory": ["read", "update"]}', 'Personal de almacén', true);
+('admin', '{"products": ["read", "create", "update", "delete"], "inventory": ["read", "create", "update", "delete"], "sales": ["read", "create", "update", "delete"], "purchases": ["read", "create", "update", "delete"], "customers": ["read", "create", "update", "delete"], "users": ["read", "create", "update", "delete"], "roles": ["read", "create", "update", "delete"], "reports": ["read", "create"]}', 'Administrador con acceso completo', true),
+('gerente', '{"products": ["read", "create", "update"], "inventory": ["read", "create", "update"], "sales": ["read", "create", "update"], "purchases": ["read", "create", "update"], "customers": ["read", "create", "update"], "users": ["read"], "reports": ["read", "create"]}', 'Gerente de tienda', false),
+('vendedor', '{"products": ["read"], "inventory": ["read"], "sales": ["read", "create"], "customers": ["read", "create"]}', 'Vendedor', false),
+('almacen', '{"products": ["read"], "inventory": ["read", "update"], "purchases": ["read", "create"]}', 'Personal de almacén', false);
 
 -- Admin User (password: admin123 - hashed with bcrypt)
 INSERT INTO users (role_id, username, email, password_hash, first_name, last_name, phone) VALUES
-(1, 'admin', 'admin@paraisobiker.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS3MebAJu', 'Administrador', 'Sistema', '+52 555 000 0000');
+(1, 'admin', 'admin@paraisobiker.com', '$2b$12$ZsqvHHQG4jyqBYiWq8mDv.g/AuZOYfrANEM5Y54JN9dRBH1nAJy0u', 'Administrador', 'Sistema', '+52 555 000 0000');
 
 -- Warehouses
 INSERT INTO warehouses (name, location, contact_info) VALUES
@@ -228,3 +272,7 @@ INSERT INTO suppliers (name, contact_name, address, email, phone, payment_terms)
 ('SRAM Components', 'Ana García', 'Puebla', 'ventas@sram.mx', '+52 222 600 0000', '30 días'),
 ('Park Tools', 'Roberto Díaz', 'Tijuana', 'ventas@parktool.mx', '+52 664 700 0000', 'Contado'),
 ('Continental Tires', 'Luis Hernández', 'Mérida', 'ventas@continental.mx', '+52 999 800 0000', '60 días');
+
+-- Cliente General (walk-in customer for POS sales)
+INSERT INTO customers (first_name, last_name, email, phone) VALUES
+('Cliente', 'General', 'general@paraisobiker.com', '');

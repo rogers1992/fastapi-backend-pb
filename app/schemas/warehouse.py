@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+
+from . import BaseSchema
 from datetime import datetime
 from typing import Optional
 
 
-class WarehouseBase(BaseModel):
+class WarehouseBase(BaseSchema):
     name: str
     location: Optional[str] = None
     contact_info: Optional[dict] = None
@@ -13,7 +15,7 @@ class WarehouseCreate(WarehouseBase):
     pass
 
 
-class WarehouseUpdate(BaseModel):
+class WarehouseUpdate(BaseSchema):
     name: Optional[str] = None
     location: Optional[str] = None
     contact_info: Optional[dict] = None
