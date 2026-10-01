@@ -30,8 +30,11 @@ from ..models.sale import Sale, SaleItem
 from ..models.user import Role, User
 
 
-# Roles allowed to see product cost data (purchase-side financials).
-_COST_VISIBILITY_ROLES = {"admin", "gerente"}
+def _user_can_see_cost(user: User) -> bool:
+    if not user.role or not user.role.permissions:
+        return False
+    purchases_permissions = user.role.permissions.get("purchases", [])
+    return "read" in purchases_permissions
 
 
 # --------------------------------------------------------------------------- #
@@ -591,9 +594,6 @@ def sales_report(
     ]
 
 
-_COST_VISIBILITY_ROLES = {"admin", "gerente"}
-
-
 def _latest_cost_cte(db: Session):
     """Pre-computed latest received unit_cost per product using window function.
 
@@ -624,7 +624,7 @@ def inventory_report(db: Session, user: User) -> List[dict]:
         .where(cost_cte.c.rn == 1)
         .scalar_subquery()
     )
-    can_see_cost = bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
+    can_see_cost = _user_can_see_cost(user)
 
     rows = (
         db.query(

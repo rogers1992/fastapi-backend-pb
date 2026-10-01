@@ -28,6 +28,8 @@ class Product(Base):
     description = Column(Text)
     barcode = Column(String(100), unique=True, index=True)
     unit_price = Column(Numeric(10, 2), nullable=False)
+    wholesale_price = Column(Numeric(10, 2))
+    cost_price = Column(Numeric(10, 2))
     weight = Column(Numeric(8, 2))
     dimensions = Column(JSONB)
     image_url = Column(String(255), nullable=True)

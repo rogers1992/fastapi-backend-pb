@@ -21,12 +21,11 @@ from ..services.image_service import ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTS
 router = APIRouter()
 
 
-# Roles allowed to see product cost data (purchase-side financials).
-_COST_VISIBILITY_ROLES = {"admin", "gerente"}
-
-
 def _user_can_see_cost(user: User) -> bool:
-    return bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
+    if not user.role or not user.role.permissions:
+        return False
+    purchases_permissions = user.role.permissions.get("purchases", [])
+    return "read" in purchases_permissions
 
 
 def _latest_cost_cte(db: Session):
@@ -124,6 +123,9 @@ async def get_products(
             "barcode": product.barcode,
             "description": product.description,
             "unit_price": product.unit_price,
+            "wholesale_price": product.wholesale_price,
+            "cost_price": _row_num_or_none(product.cost_price) if can_see_cost else None,
+            "effective_cost": _row_num_or_none(current_cost or product.cost_price) if can_see_cost else None,
             "weight": product.weight,
             "image_url": product.image_url,
             "category_id": product.category_id,
@@ -185,6 +187,9 @@ async def get_product(
         "barcode": product.barcode,
         "description": product.description,
         "unit_price": product.unit_price,
+        "wholesale_price": product.wholesale_price,
+        "cost_price": _row_num_or_none(product.cost_price) if can_see_cost else None,
+        "effective_cost": _row_num_or_none(current_cost or product.cost_price) if can_see_cost else None,
         "weight": product.weight,
         "image_url": product.image_url,
         "category_id": product.category_id,
@@ -237,6 +242,9 @@ async def get_product_by_barcode(
         "barcode": product.barcode,
         "description": product.description,
         "unit_price": product.unit_price,
+        "wholesale_price": product.wholesale_price,
+        "cost_price": _row_num_or_none(product.cost_price) if can_see_cost else None,
+        "effective_cost": _row_num_or_none(current_cost or product.cost_price) if can_see_cost else None,
         "weight": product.weight,
         "image_url": product.image_url,
         "category_id": product.category_id,

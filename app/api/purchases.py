@@ -191,6 +191,11 @@ async def receive_purchase(
         item.received_quantity = item.quantity
         affected_inventory.append(inventory)
 
+        # Update product cost_price to latest PO unit_cost
+        product = item.product
+        if product:
+            product.cost_price = item.unit_cost
+
     order.status = "received"
     order.received_date = date.today()
 

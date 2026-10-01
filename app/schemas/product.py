@@ -27,6 +27,8 @@ class ProductBase(BaseSchema):
     barcode: Optional[str] = None
     description: Optional[str] = None
     unit_price: Decimal
+    wholesale_price: Optional[Decimal] = None
+    cost_price: Optional[Decimal] = None
     weight: Optional[Decimal] = None
     image_url: Optional[str] = None
     category_id: int
@@ -41,6 +43,8 @@ class ProductUpdate(BaseSchema):
     barcode: Optional[str] = None
     description: Optional[str] = None
     unit_price: Optional[Decimal] = None
+    wholesale_price: Optional[Decimal] = None
+    cost_price: Optional[Decimal] = None
     weight: Optional[Decimal] = None
     image_url: Optional[str] = None
     category_id: Optional[int] = None
@@ -53,6 +57,7 @@ class ProductResponse(ProductBase):
     created_at: datetime
     updated_at: datetime
     current_cost: Optional[Decimal] = None
+    effective_cost: Optional[Decimal] = None
     images: Optional[List[ProductImageResponse]] = []
     
     class Config:
