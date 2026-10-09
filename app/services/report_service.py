@@ -595,7 +595,7 @@ def sales_report(
 
 
 def _latest_cost_cte(db: Session):
-    """Pre-computed latest received unit_cost per product using window function.
+    """Pre-computed latest received unit_cost per product from retail warehouses.
 
     Returns a subquery with columns: product_id, unit_cost, rn
     Use with: .outerjoin(cte, cte.c.product_id == X).filter(cte.c.rn == 1)
@@ -610,26 +610,61 @@ def _latest_cost_cte(db: Session):
             ).label("rn"),
         )
         .join(Order, Order.id == OrderItem.order_id)
+        .join(Warehouse, Warehouse.id == Order.warehouse_id)
         .filter(Order.status == "received")
         .filter(Order.received_date.isnot(None))
+        .filter(Warehouse.is_wholesale == False)
+        .subquery()
+    )
+
+
+def _latest_wholesale_cost_cte(db: Session):
+    """Pre-computed latest received unit_cost per product from wholesale warehouses."""
+    return (
+        db.query(
+            OrderItem.product_id,
+            OrderItem.unit_cost,
+            func.row_number().over(
+                partition_by=OrderItem.product_id,
+                order_by=Order.received_date.desc(),
+            ).label("rn"),
+        )
+        .join(Order, Order.id == OrderItem.order_id)
+        .join(Warehouse, Warehouse.id == Order.warehouse_id)
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .filter(Warehouse.is_wholesale == True)
         .subquery()
     )
 
 
 def inventory_report(db: Session, user: User) -> List[dict]:
-    cost_cte = _latest_cost_cte(db)
-    cost_subq = (
-        select(cost_cte.c.unit_cost)
-        .where(cost_cte.c.product_id == Product.id)
-        .where(cost_cte.c.rn == 1)
+    retail_cost_cte = _latest_cost_cte(db)
+    retail_cost_subq = (
+        select(retail_cost_cte.c.unit_cost)
+        .where(retail_cost_cte.c.product_id == Product.id)
+        .where(retail_cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
+    wholesale_cost_cte = _latest_wholesale_cost_cte(db)
+    wholesale_cost_subq = (
+        select(wholesale_cost_cte.c.unit_cost)
+        .where(wholesale_cost_cte.c.product_id == Product.id)
+        .where(wholesale_cost_cte.c.rn == 1)
         .scalar_subquery()
     )
     can_see_cost = _user_can_see_cost(user)
 
+    # Select cost based on warehouse type
+    cost_expr = case(
+        (Warehouse.is_wholesale == True, wholesale_cost_subq),
+        else_=retail_cost_subq,
+    )
+
     rows = (
         db.query(
             InventoryItem, Product, Category, Warehouse,
-            cost_subq.label("current_cost"),
+            cost_expr.label("current_cost"),
         )
         .join(Product, Product.id == InventoryItem.product_id)
         .outerjoin(Category, Category.id == Product.category_id)
@@ -834,20 +869,33 @@ def profit_report(
 ) -> List[dict]:
     """Per-product gross profit using historical COGS.
 
-    COGS per sale item is inferred from the most recent received Order's
-    unit_cost for that product, scoped to purchases received at or before
-    the sale date. Products with sales but no recorded purchases report
+    COGS per sale item uses the latest received PO unit_cost, selecting
+    the wholesale cost when the sale item was wholesale, and the retail
+    cost otherwise. Products with sales but no recorded purchases report
     COGS=0 (margin=100%, flagged in UI as needing cost data).
     """
     from_dt, to_dt = _coerce_range(from_date, to_date)
 
     # Pre-computed latest unit_cost per product (window function, O(N) instead of O(N*M))
-    cost_cte = _latest_cost_cte(db)
-    cost_subq = (
-        select(cost_cte.c.unit_cost)
-        .where(cost_cte.c.product_id == SaleItem.product_id)
-        .where(cost_cte.c.rn == 1)
+    retail_cost_cte = _latest_cost_cte(db)
+    retail_cost_subq = (
+        select(retail_cost_cte.c.unit_cost)
+        .where(retail_cost_cte.c.product_id == SaleItem.product_id)
+        .where(retail_cost_cte.c.rn == 1)
         .scalar_subquery()
+    )
+    wholesale_cost_cte = _latest_wholesale_cost_cte(db)
+    wholesale_cost_subq = (
+        select(wholesale_cost_cte.c.unit_cost)
+        .where(wholesale_cost_cte.c.product_id == SaleItem.product_id)
+        .where(wholesale_cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
+
+    # Select cost based on whether the sale item was wholesale
+    cost_expr = case(
+        (SaleItem.is_wholesale == True, wholesale_cost_subq),
+        else_=retail_cost_subq,
     )
 
     q = (
@@ -857,7 +905,7 @@ def profit_report(
             Product.sku,
             func.coalesce(func.sum(SaleItem.quantity), 0),
             func.coalesce(func.sum(SaleItem.total_price), 0),
-            func.coalesce(func.sum(SaleItem.quantity * cost_subq), 0),
+            func.coalesce(func.sum(SaleItem.quantity * cost_expr), 0),
         )
         .join(SaleItem, SaleItem.product_id == Product.id)
         .join(Sale, Sale.id == SaleItem.sale_id)
@@ -900,7 +948,8 @@ def profit_summary_report(
     """Time-series gross profit summary grouped by day/week/month.
 
     Uses the same historical COGS logic as profit_report(): the latest
-    received purchase order unit_cost at or before each sale date.
+    received purchase order unit_cost, selecting wholesale cost when the
+    sale item was wholesale, and retail cost otherwise.
     """
     period = (period or "daily").lower()
     if period not in {"daily", "weekly", "monthly"}:
@@ -920,19 +969,31 @@ def profit_summary_report(
         bucket = func.date_trunc("month", Sale.sale_date)
 
     # Pre-computed latest unit_cost per product (window function, O(N) instead of O(N*M))
-    cost_cte = _latest_cost_cte(db)
-    cost_subq = (
-        select(cost_cte.c.unit_cost)
-        .where(cost_cte.c.product_id == SaleItem.product_id)
-        .where(cost_cte.c.rn == 1)
+    retail_cost_cte = _latest_cost_cte(db)
+    retail_cost_subq = (
+        select(retail_cost_cte.c.unit_cost)
+        .where(retail_cost_cte.c.product_id == SaleItem.product_id)
+        .where(retail_cost_cte.c.rn == 1)
         .scalar_subquery()
+    )
+    wholesale_cost_cte = _latest_wholesale_cost_cte(db)
+    wholesale_cost_subq = (
+        select(wholesale_cost_cte.c.unit_cost)
+        .where(wholesale_cost_cte.c.product_id == SaleItem.product_id)
+        .where(wholesale_cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
+
+    cost_expr = case(
+        (SaleItem.is_wholesale == True, wholesale_cost_subq),
+        else_=retail_cost_subq,
     )
 
     q = (
         db.query(
             bucket.label("bucket"),
             func.coalesce(func.sum(SaleItem.total_price), 0),
-            func.coalesce(func.sum(SaleItem.quantity * cost_subq), 0),
+            func.coalesce(func.sum(SaleItem.quantity * cost_expr), 0),
             func.count(Sale.id),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)

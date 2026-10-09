@@ -29,6 +29,7 @@ class ProductBase(BaseSchema):
     unit_price: Decimal
     wholesale_price: Optional[Decimal] = None
     cost_price: Optional[Decimal] = None
+    wholesale_cost_price: Optional[Decimal] = None
     weight: Optional[Decimal] = None
     image_url: Optional[str] = None
     category_id: int
@@ -45,6 +46,7 @@ class ProductUpdate(BaseSchema):
     unit_price: Optional[Decimal] = None
     wholesale_price: Optional[Decimal] = None
     cost_price: Optional[Decimal] = None
+    wholesale_cost_price: Optional[Decimal] = None
     weight: Optional[Decimal] = None
     image_url: Optional[str] = None
     category_id: Optional[int] = None

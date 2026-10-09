@@ -34,6 +34,7 @@ class Warehouse(Base):
     location = Column(String)
     contact_info = Column(JSONB)
     is_active = Column(Boolean, default=True)
+    is_wholesale = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     
     # Relationships

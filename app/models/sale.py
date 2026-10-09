@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Numeric, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
@@ -43,6 +43,7 @@ class SaleItem(Base):
     unit_price = Column(Numeric(10, 2), nullable=False)
     discount = Column(Numeric(10, 2), default=0)
     total_price = Column(Numeric(10, 2), nullable=False)
+    is_wholesale = Column(Boolean, default=False)
     notes = Column(Text)
     
     # Relationships
