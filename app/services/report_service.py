@@ -157,27 +157,30 @@ def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz", wareh
     avg_ticket = rev_month / sales_month if sales_month else Decimal("0")
 
     # --- Query 2: COGS (today & month) using window function instead of correlated subquery ---
-    latest_cost_cte = (
-        db.query(
-            OrderItem.product_id,
-            OrderItem.unit_cost,
-            func.row_number().over(
-                partition_by=OrderItem.product_id,
-                order_by=Order.received_date.desc(),
-            ).label("rn"),
-        )
-        .join(Order, Order.id == OrderItem.order_id)
-        .filter(Order.status == "received")
-        .filter(Order.received_date.isnot(None))
-        .subquery()
+    # Select cost based on whether the sale item was wholesale
+    retail_cost_cte = _latest_cost_cte(db)
+    retail_cost_subq = (
+        select(retail_cost_cte.c.unit_cost)
+        .where(retail_cost_cte.c.product_id == SaleItem.product_id)
+        .where(retail_cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
+    wholesale_cost_cte = _latest_wholesale_cost_cte(db)
+    wholesale_cost_subq = (
+        select(wholesale_cost_cte.c.unit_cost)
+        .where(wholesale_cost_cte.c.product_id == SaleItem.product_id)
+        .where(wholesale_cost_cte.c.rn == 1)
+        .scalar_subquery()
+    )
+    cost_expr = case(
+        (SaleItem.is_wholesale == True, wholesale_cost_subq),
+        else_=retail_cost_subq,
     )
 
     cogs_base = (
         db.query(SaleItem)
         .select_from(SaleItem)
         .join(Sale, Sale.id == SaleItem.sale_id)
-        .outerjoin(latest_cost_cte, latest_cost_cte.c.product_id == SaleItem.product_id)
-        .filter(latest_cost_cte.c.rn == 1)
         .filter(Sale.status == "completed")
         .filter(Sale.sale_date >= month_start_utc, Sale.sale_date < today_end_utc)
     )
@@ -186,8 +189,8 @@ def dashboard_summary(db: Session, user: User, tz: str = "America/La_Paz", wareh
     cogs_base = _apply_sales_visibility(cogs_base, user)
 
     cogs_row = cogs_base.with_entities(
-        func.coalesce(func.sum(case((Sale.sale_date >= today_start_utc, SaleItem.quantity * latest_cost_cte.c.unit_cost))), 0),
-        func.coalesce(func.sum(case((Sale.sale_date >= month_start_utc, SaleItem.quantity * latest_cost_cte.c.unit_cost))), 0),
+        func.coalesce(func.sum(case((Sale.sale_date >= today_start_utc, SaleItem.quantity * cost_expr))), 0),
+        func.coalesce(func.sum(case((Sale.sale_date >= month_start_utc, SaleItem.quantity * cost_expr))), 0),
     ).first()
 
     cogs_today = _safe_dec(cogs_row[0])
