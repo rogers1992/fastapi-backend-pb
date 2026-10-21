@@ -8,6 +8,7 @@ from pathlib import Path
 from ..database import get_db
 from ..models.product import Product, Category, Supplier, ProductImage
 from ..models.order import Order, OrderItem
+from ..models.inventory import Warehouse
 from ..schemas.product import ProductCreate, ProductResponse, ProductUpdate, ProductImageCreate, ProductImageResponse
 from ..core.dependencies import require_permission
 from ..models.user import User
@@ -21,16 +22,15 @@ from ..services.image_service import ALLOWED_IMAGE_TYPES, ALLOWED_IMAGE_EXTS
 router = APIRouter()
 
 
-# Roles allowed to see product cost data (purchase-side financials).
-_COST_VISIBILITY_ROLES = {"admin", "gerente"}
-
-
 def _user_can_see_cost(user: User) -> bool:
-    return bool(user.role) and user.role.name in _COST_VISIBILITY_ROLES
+    if not user.role or not user.role.permissions:
+        return False
+    purchases_permissions = user.role.permissions.get("purchases", [])
+    return "read" in purchases_permissions
 
 
 def _latest_cost_cte(db: Session):
-    """Pre-computed latest received unit_cost per product using window function."""
+    """Latest received unit_cost per product from retail (non-wholesale) warehouses."""
     return (
         db.query(
             OrderItem.product_id,
@@ -41,15 +41,48 @@ def _latest_cost_cte(db: Session):
             ).label("rn"),
         )
         .join(Order, Order.id == OrderItem.order_id)
+        .join(Warehouse, Warehouse.id == Order.warehouse_id)
         .filter(Order.status == "received")
         .filter(Order.received_date.isnot(None))
+        .filter(Warehouse.is_wholesale == False)
         .subquery()
     )
 
 
 def _latest_cost_subquery(db: Session):
-    """Latest received OrderItem.unit_cost per product (non-correlated CTE)."""
+    """Latest received OrderItem.unit_cost per product from retail warehouses."""
     cte = _latest_cost_cte(db)
+    return (
+        select(cte.c.unit_cost)
+        .where(cte.c.product_id == Product.id)
+        .where(cte.c.rn == 1)
+        .scalar_subquery()
+    )
+
+
+def _latest_wholesale_cost_cte(db: Session):
+    """Latest received unit_cost per product from wholesale warehouses."""
+    return (
+        db.query(
+            OrderItem.product_id,
+            OrderItem.unit_cost,
+            func.row_number().over(
+                partition_by=OrderItem.product_id,
+                order_by=Order.received_date.desc(),
+            ).label("rn"),
+        )
+        .join(Order, Order.id == OrderItem.order_id)
+        .join(Warehouse, Warehouse.id == Order.warehouse_id)
+        .filter(Order.status == "received")
+        .filter(Order.received_date.isnot(None))
+        .filter(Warehouse.is_wholesale == True)
+        .subquery()
+    )
+
+
+def _latest_wholesale_cost_subquery(db: Session):
+    """Latest received OrderItem.unit_cost per product from wholesale warehouses."""
+    cte = _latest_wholesale_cost_cte(db)
     return (
         select(cte.c.unit_cost)
         .where(cte.c.product_id == Product.id)
@@ -87,8 +120,13 @@ async def get_products(
     current_user: User = Depends(require_permission("products", "read")),
 ):
     cost_subq = _latest_cost_subquery(db)
+    wholesale_cost_subq = _latest_wholesale_cost_subquery(db)
     from sqlalchemy.orm import joinedload
-    query = db.query(Product, cost_subq.label("current_cost")).options(joinedload(Product.images))
+    query = db.query(
+        Product,
+        cost_subq.label("current_cost"),
+        wholesale_cost_subq.label("current_wholesale_cost"),
+    ).options(joinedload(Product.images))
     if not include_inactive:
         query = query.filter(Product.is_active == True)
 
@@ -105,7 +143,7 @@ async def get_products(
 
     can_see_cost = _user_can_see_cost(current_user)
     items = []
-    for product, current_cost in rows:
+    for product, current_cost, current_wholesale_cost in rows:
         images_data = []
         for img in product.images:
             images_data.append({
@@ -124,6 +162,10 @@ async def get_products(
             "barcode": product.barcode,
             "description": product.description,
             "unit_price": product.unit_price,
+            "wholesale_price": product.wholesale_price,
+            "cost_price": _row_num_or_none(product.cost_price) if can_see_cost else None,
+            "wholesale_cost_price": _row_num_or_none(product.wholesale_cost_price) if can_see_cost else None,
+            "effective_cost": _row_num_or_none(current_cost or product.cost_price) if can_see_cost else None,
             "weight": product.weight,
             "image_url": product.image_url,
             "category_id": product.category_id,
@@ -132,6 +174,7 @@ async def get_products(
             "created_at": product.created_at,
             "updated_at": product.updated_at,
             "current_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+            "current_wholesale_cost": _row_num_or_none(current_wholesale_cost) if can_see_cost else None,
             "images": images_data,
         })
 
@@ -152,9 +195,14 @@ async def get_product(
     current_user: User = Depends(require_permission("products", "read")),
 ):
     cost_subq = _latest_cost_subquery(db)
+    wholesale_cost_subq = _latest_wholesale_cost_subquery(db)
     from sqlalchemy.orm import joinedload
     row = (
-        db.query(Product, cost_subq.label("current_cost"))
+        db.query(
+            Product,
+            cost_subq.label("current_cost"),
+            wholesale_cost_subq.label("current_wholesale_cost"),
+        )
         .options(joinedload(Product.images))
         .filter(
             Product.id == product_id,
@@ -164,7 +212,7 @@ async def get_product(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Product not found")
-    product, current_cost = row
+    product, current_cost, current_wholesale_cost = row
     can_see_cost = _user_can_see_cost(current_user)
     
     images_data = []
@@ -185,6 +233,10 @@ async def get_product(
         "barcode": product.barcode,
         "description": product.description,
         "unit_price": product.unit_price,
+        "wholesale_price": product.wholesale_price,
+        "cost_price": _row_num_or_none(product.cost_price) if can_see_cost else None,
+        "wholesale_cost_price": _row_num_or_none(product.wholesale_cost_price) if can_see_cost else None,
+        "effective_cost": _row_num_or_none(current_cost or product.cost_price) if can_see_cost else None,
         "weight": product.weight,
         "image_url": product.image_url,
         "category_id": product.category_id,
@@ -193,6 +245,7 @@ async def get_product(
         "created_at": product.created_at,
         "updated_at": product.updated_at,
         "current_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+        "current_wholesale_cost": _row_num_or_none(current_wholesale_cost) if can_see_cost else None,
         "images": images_data,
     }
 
@@ -204,9 +257,14 @@ async def get_product_by_barcode(
     current_user: User = Depends(require_permission("products", "read")),
 ):
     cost_subq = _latest_cost_subquery(db)
+    wholesale_cost_subq = _latest_wholesale_cost_subquery(db)
     from sqlalchemy.orm import joinedload
     row = (
-        db.query(Product, cost_subq.label("current_cost"))
+        db.query(
+            Product,
+            cost_subq.label("current_cost"),
+            wholesale_cost_subq.label("current_wholesale_cost"),
+        )
         .options(joinedload(Product.images))
         .filter(
             Product.barcode == barcode,
@@ -216,7 +274,7 @@ async def get_product_by_barcode(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Product not found")
-    product, current_cost = row
+    product, current_cost, current_wholesale_cost = row
     can_see_cost = _user_can_see_cost(current_user)
     
     images_data = []
@@ -237,6 +295,10 @@ async def get_product_by_barcode(
         "barcode": product.barcode,
         "description": product.description,
         "unit_price": product.unit_price,
+        "wholesale_price": product.wholesale_price,
+        "cost_price": _row_num_or_none(product.cost_price) if can_see_cost else None,
+        "wholesale_cost_price": _row_num_or_none(product.wholesale_cost_price) if can_see_cost else None,
+        "effective_cost": _row_num_or_none(current_cost or product.cost_price) if can_see_cost else None,
         "weight": product.weight,
         "image_url": product.image_url,
         "category_id": product.category_id,
@@ -245,6 +307,7 @@ async def get_product_by_barcode(
         "created_at": product.created_at,
         "updated_at": product.updated_at,
         "current_cost": _row_num_or_none(current_cost) if can_see_cost else None,
+        "current_wholesale_cost": _row_num_or_none(current_wholesale_cost) if can_see_cost else None,
         "images": images_data,
     }
 

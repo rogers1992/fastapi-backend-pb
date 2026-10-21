@@ -9,6 +9,7 @@ class WarehouseBase(BaseSchema):
     name: str
     location: Optional[str] = None
     contact_info: Optional[dict] = None
+    is_wholesale: Optional[bool] = False
 
 
 class WarehouseCreate(WarehouseBase):
@@ -20,6 +21,7 @@ class WarehouseUpdate(BaseSchema):
     location: Optional[str] = None
     contact_info: Optional[dict] = None
     is_active: Optional[bool] = None
+    is_wholesale: Optional[bool] = None
 
 
 class WarehouseResponse(WarehouseBase):

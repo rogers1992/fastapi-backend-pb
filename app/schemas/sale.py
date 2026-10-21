@@ -10,6 +10,7 @@ class SaleItemBase(BaseSchema):
     quantity: int
     unit_price: Decimal
     discount: Optional[Decimal] = 0
+    is_wholesale: Optional[bool] = False
 
 class SaleItemCreate(SaleItemBase):
     pass
@@ -19,6 +20,7 @@ class SaleItemResponse(SaleItemBase):
     sale_id: int
     product_name: str
     total_price: Decimal
+    is_wholesale: bool
     
     class Config:
         from_attributes = True

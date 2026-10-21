@@ -252,6 +252,7 @@ async def create_sale(
             unit_price=item_data.unit_price,
             discount=item_data.discount,
             total_price=item_total,
+            is_wholesale=item_data.is_wholesale,
         )
         db.add(sale_item)
 
