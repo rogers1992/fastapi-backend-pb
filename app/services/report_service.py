@@ -19,7 +19,8 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from fastapi.responses import StreamingResponse
-from sqlalchemy import case, func, select
+from sqlalchemy import Text, case, func, literal_column, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.orm import Session
 
 from ..models.customer import Customer, Loyalty
@@ -552,8 +553,16 @@ def sales_report(
             Sale.total_amount,
             Warehouse.id,
             Warehouse.name,
+            func.coalesce(
+                func.string_agg(
+                    Product.name + "|" + func.cast(SaleItem.quantity, Text),
+                    aggregate_order_by(literal_column("', '"), Product.name.asc())
+                ),
+                ""
+            ),
         )
         .join(SaleItem, SaleItem.sale_id == Sale.id)
+        .join(Product, Product.id == SaleItem.product_id)
         .outerjoin(Customer, Customer.id == Sale.customer_id)
         .outerjoin(User, User.id == Sale.user_id)
         .outerjoin(Warehouse, Warehouse.id == Sale.warehouse_id)
@@ -592,6 +601,7 @@ def sales_report(
             "tax_amount": _row_num(r[13]),
             "total_amount": _row_num(r[14]),
             "warehouse_name": r[16],
+            "products": r[17] or "",
         }
         for r in rows
     ]
@@ -719,8 +729,16 @@ def purchases_report(
             func.count(OrderItem.id),
             func.coalesce(func.sum(OrderItem.quantity), 0),
             Order.total_amount,
+            func.coalesce(
+                func.string_agg(
+                    Product.name + "|" + func.cast(OrderItem.quantity, Text),
+                    aggregate_order_by(literal_column("', '"), Product.name.asc())
+                ),
+                ""
+            ),
         )
         .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
         .outerjoin(Supplier, Supplier.id == Order.supplier_id)
         .outerjoin(Warehouse, Warehouse.id == Order.warehouse_id)
     )
@@ -751,6 +769,7 @@ def purchases_report(
             "items_count": int(r[7] or 0),
             "units_ordered": int(r[8] or 0),
             "total_amount": _row_num(r[9]),
+            "products": r[10] or "",
         }
         for r in rows
     ]
@@ -1260,8 +1279,8 @@ def rows_to_csv_response(
 
 SALES_REPORT_HEADERS = [
     "sale_id", "sale_date", "customer_id", "customer_name", "seller_id",
-    "seller_name", "payment_method", "status", "items_count", "units_sold",
-    "subtotal", "tax_amount", "total_amount", "warehouse_name",
+    "seller_name", "payment_method", "products",
+    "units_sold", "subtotal", "tax_amount", "total_amount", "warehouse_name",
 ]
 INVENTORY_REPORT_HEADERS = [
     "product_id", "name", "sku", "category_id", "category_name",

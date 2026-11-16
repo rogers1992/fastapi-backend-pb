@@ -8,6 +8,7 @@ from .customer import Customer, Loyalty
 from .notification import Notification
 from .cash_register import CashRegister, CashSession, CashMovement
 from .expense import ExpenseCategory, Expense
+from .contact import ContactMessage
 
 __all__ = [
     'User', 'Role',
@@ -19,4 +20,5 @@ __all__ = [
     'Notification',
     'CashRegister', 'CashSession', 'CashMovement',
     'ExpenseCategory', 'Expense',
+    'ContactMessage',
 ]

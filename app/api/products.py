@@ -116,6 +116,7 @@ async def get_products(
     limit: int = 10,
     search: str | None = None,
     include_inactive: bool = False,
+    wholesale_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("products", "read")),
 ):
@@ -129,6 +130,9 @@ async def get_products(
     ).options(joinedload(Product.images))
     if not include_inactive:
         query = query.filter(Product.is_active == True)
+
+    if wholesale_only:
+        query = query.filter(Product.wholesale_price.isnot(None))
 
     if search:
         search_pattern = f"%{search}%"

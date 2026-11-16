@@ -15,6 +15,7 @@ class SalesReportRow(BaseSchema):
     seller_name: Optional[str]
     payment_method: str
     status: str
+    products: Optional[str] = None
     items_count: Optional[int]
     units_sold: Optional[int]
     subtotal: Decimal

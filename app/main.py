@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import text
 import traceback
 from .config import settings
-from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard, cash_register, expenses
+from .api import auth, products, inventory, sales, purchases, customers, users, roles, categories, suppliers, warehouses, notifications, reports, dashboard, cash_register, expenses, public
 from .database import engine, Base
 
 
@@ -182,6 +182,7 @@ app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(cash_register.router, prefix="/api", tags=["Cash Register"])
 app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])
+app.include_router(public.router, prefix="/api/public", tags=["Public"])
 
 # Serve uploaded product images (and any future uploads) as static files.
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
